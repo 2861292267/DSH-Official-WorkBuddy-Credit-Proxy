@@ -1,0 +1,6 @@
+# Register the WorkBuddy XD Pool provider. Discovery is read-only: the plugin
+# reuses the WorkBuddy desktop app's own sign-in files and never starts a
+# separate OAuth flow. Requests rotate across every discovered account.
+- insert:
+    - id: llm-workbuddy-xdpool
+      name: dsh-workbuddy-xdpool
