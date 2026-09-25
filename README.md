@@ -4,8 +4,8 @@
 用 WorkBuddy 的积分驱动 GLM / DeepSeek / Kimi 等模型。
 
 > **本仓是改编版。** 基础插件为 [`XDTrees/dsh-workbuddy-xdpool`](https://github.com/XDTrees/dsh-workbuddy-xdpool)（MIT，作者 **XDTrees**），
-> 本项目针对 DSH Desktop **0.1.7-rc.2** 内核做了兼容修复，并新增两项能力。
-> 原作者版权归 XDTrees 所有，许可证见 [`plugin/LICENSE`](plugin/LICENSE)。原版文档见 [`plugin/README.md`](plugin/README.md)。
+> 本项目针对 DSH Desktop **0.1.7-rc.2** 内核做了兼容修复，并新增若干能力（见 [改动清单](#改动清单)）。
+> 原作者版权归 XDTrees 所有，许可证见 [`LICENSE`](LICENSE)。原版文档见 [`UPSTREAM-README.md`](UPSTREAM-README.md)。
 
 ---
 
@@ -47,7 +47,7 @@
 | `patch_xdpool_live_config.py` | `index.js` | 订阅 `settings/document-updated`，配置一变就重新读取并应用（替代被删除的 `installSection().onChange`） |
 | `patch_xdpool_debug.py` | `client.js` | （可选，诊断用）把组件异常直接画在界面上，用于定位"整块空白" |
 
-### 二、新增能力（3 处）
+### 二、新增能力（3 处，2026-09-25 上午）
 
 | 脚本 | 能力 |
 |---|---|
@@ -55,7 +55,7 @@
 | `patch_xdpool_switch_sync.py` | **启动时从 workbuddy-switch 账号库自动同步**。读 `~/.wb-switch/accounts.json`，镜像成插件认的凭据文件，此后在 switch 里换号 / token 续期都不必手工导出导入。只在源文件 `size:mtime` 变化时重写；**源缺失或损坏时绝不清理已有凭据**；只增删自己前缀的文件，不碰桌面 App 的活动凭据 |
 | `patch_xdpool_oauth_scan.py` | **卡片内「扫码添加账号」**。见下节 |
 
-### 三、卡片内扫码添加账号
+### 三、卡片内扫码添加账号（2026-09-25 上午）
 
 原插件**自己不会添加账号** —— 它的 `login` 子命令只是一段说明（"去 WorkBuddy App 扫码登录，再抓快照"）。
 本版把桌面客户端的登录流程复刻进了插件：
@@ -63,17 +63,44 @@
 ```
 POST {网关}/v2/plugin/auth/state?platform=workbuddy     header: X-Client-Platform: workbuddy
      → {code:0, data:{state, authUrl}}
-二维码 = authUrl（https://www.codebuddy.cn/login?platform=workbuddy&state=…）
-GET  {网关}/v2/plugin/auth/token?state=…     code 11217 = 等待扫码中；0 = 成功
+登录链接 = authUrl（https://www.codebuddy.cn/login?platform=workbuddy&state=…）
+GET  {网关}/v2/plugin/auth/token?state=…     code 11217 = 等待扫码中；0 或 200 = 成功
 GET  {网关}/v2/plugin/login/account?state=…  → 账号资料
 网关：国内 = https://www.codebuddy.cn   国际 = https://www.workbuddy.ai
 ```
 
+> `code` 起点：**0 和 200 都算成功**。只认 0 会让成功时返回 200 的应答被误判为失效并丢弃令牌（详见上文「四、2026-09-25 追加」一节）。
+
 - 宿主侧新增两条路由：`POST /plugins/dsh-workbuddy-xdpool/oauth/start`、`GET .../oauth/poll`
-- 客户端在「账号使用方式」按钮区新增「扫码添加账号」+ 二维码面板 + 2.5 秒轮询
-- 二维码用 `qrcode` 包渲染，且**用动态 `import()` 加载** —— 缺包只让这一个功能不可用，不会让整个插件加载失败
+- 客户端在「账号使用方式」按钮区新增「添加账号」+ 登录链接面板（**命中即自动打开系统浏览器**，无需手点）+ 2.5 秒轮询
+- 登录链接直接取自上游返回的 `authUrl`；仅当其缺失时才回退用 `qrcode` 渲染二维码兜底。`qrcode` **用动态 `import()` 加载** —— 缺包只让兜底不可用，不会让整个插件加载失败
 - 扫到的账号存为 `workbuddy-scan-<id>.info`（独立前缀），**不会被 switch 同步覆盖**
-- 诊断写 `~/.dsh/.workbuddy-xdpool/oauth-last.json`，**只记字段形状、不含 token**
+- 诊断写 `~/.dsh/.workbuddy-xdpool/oauth-last.json`，含真实 `code` 与分类，**不含 token**
+
+### 四、2026-09-25 追加：用量统计、扫码改链接、5xx 换号、去手机号登录
+
+> 这一批改动**直接写进 `lib/`**（不走 `patches/` 重放），已随本仓提交。
+
+| 能力 | 说明 |
+|---|---|
+| **积分用量四格条** | 卡片顶部显示「剩余积分 / 今日消耗 / 近 7 天消耗 / 本月消耗」。剩余积分来自上游已有的按包余量求和；**三个消耗窗口上游没有接口**（`meter/usage`、`get-user-usage`、`consume-record`、`get-consume-record`、`daily-usage` 实测全部 404），因此由插件自己记账：每次拿到账号余额就与上次比较，**下降记入当天**、上升（充值/重置/换包）不计，按本地日期分桶后滚动汇总 |
+| **扫码改可点链接 + 自动打开** | 二维码换成可点链接并**自动用系统浏览器打开**，不必掏手机扫。宿主主窗口注册了 `setWindowOpenHandler`：对 http/https 先 `shell.openExternal(url)` 真正拉起浏览器，**然后**返回 `{action:"deny"}` 取消渲染进程建窗 —— 所以 `window.open()` 在**成功时也返回 `null`**，不能据此判定「被拦截」（早先版本正是在这里误报过）。二维码保留为 `authUrl` 缺失时的兜底 |
+| **修复扫码成功却被判失效** | 原轮询只认 `code === 0`。上游成功时若返回 `code: 200`，会被判成「二维码已失效」并**丢弃刚拿到的令牌** —— 表现就是「浏览器显示登录成功，插件却一直等待然后报错」。现改为 `0` 与 `200` 均视为成功（`oauthCodeSucceeded`），`11217` 仍为等待中 |
+| **上游 5xx 纳入自动换号** | 原实现只有 `401/403`、`402`、`429` 会轮换到下一个账号；其余一律 `break`。上游 5xx（含网关偶发 **550**）属「换个号可能就好」的瞬时故障，却只试 1 个账号就放弃 —— 报错里 `after 1 account(s)` 就是这么来的，8 个号的池子等于白建。现 5xx 改为短冷却后换号重试，且**不置** `exhaustedByRateLimit`（否则报错文案会被篡改成「所有账号都被限流」，是假话） |
+| **移除手机号登录** | 曾尝试用上游 `/v1/auth/sms/code/*` 做手机号+验证码登录，实测该族接口属账号主机的**绑定/解绑手机号**流程而非登录（客户端自己的文案是「绑定后，您可使用手机号登录当前账号」），且必须携带由 SSO 握手签发的 `state_token`，裸手机号换不出凭据。功能只能产出 `verified-no-token`，故连同客户端面板一并移除 |
+| **轮询诊断增强** | `oauth-last.json` 现记录**真实 `code` 数值**、分类结果、响应顶层键与 `oauthShape` 后的正文（**仍不含 token**）。此前三种不同故障都被报成「listProviders 为空」，把人带偏过 |
+| **卡片展开不再等** | 卡片原先在折叠状态下不加载数据（`if (!open) return`），所以要「点开箭头 → 空白等几秒」。现改为**挂载时即预取**状态，展开即可见；30 秒轮询仍只在展开时进行 |
+| **「立即运行」不再卡界面** | 积分自动化的「立即运行」原会空等最长 3 分钟（90 × 2s 轮询）让按钮锁在「运行中」。该任务**本来就由宿主后台跑完、与界面无关**（宿主路由不 `await`，调度器 `startRunAll()` 立即返回），故改为点完立刻返回，提示改为「已开始执行，后台会继续跑完，可关闭面板」 |
+
+**同一批修掉的几个真 bug**（均由独立复核发现，记录在此以免重蹈）：
+
+- `dayKeyLocal` 收到数值而非 `Date` → 每次真实消耗观测都抛 `TypeError`，且被 credits 的 `catch` 吞成该账号的 `creditsError`：账本永远是 0，账号行还误报上游错误
+- 「近 7 天」窗口差一（`>` 应为 `>=`），静默少算一天
+- `usageLedgerCache` 在 `emptyUsageLedger` 声明前调用（TDZ），**整个模块 import 失败、72 个导出全灭**，而 `node --check` 是通过的
+- `round2` 的有限值判断在乘法之前，溢出会漏出 `Infinity`（`JSON.stringify` 后变 `null`）
+- 中文语言分支里混入了一句英文（`row.oauthExpired`）
+
+> **关于用量数字的诚实说明**：三个消耗窗口是**插件自行累计**的，不是上游历史。装上之前或插件未运行的时段不会被补算，所以安装首日会接近 0 并随后增长。这一点在卡片上有 tooltip 说明，且仅当起始日期很新时才额外显示一行提示，不做常驻打扰。
 
 ---
 
@@ -87,7 +114,8 @@ GET  {网关}/v2/plugin/login/account?state=…  → 账号资料
 git clone https://github.com/2861292267/DSH-Official-WorkBuddy-Credit-Proxy \
   ~/.dsh/profiles/<你的profile>/node_modules/dsh-workbuddy-xdpool
 
-# 2. 扫码功能需要二维码依赖（纯 JS，无原生编译）
+# 2.（可选）二维码兜底依赖，纯 JS、无原生编译
+#    登录链接已能自动打开；只有上游不返回 authUrl 时才回退二维码，此时才需要它
 cd ~/.dsh/profiles/<你的profile>
 pnpm add qrcode --config.minimumReleaseAge=0
 
@@ -149,5 +177,5 @@ curl -s "http://127.0.0.1:19387/plugins/dsh-workbuddy-xdpool/oauth/poll?state=<s
 
 ## 许可
 
-- `plugin/` 下的内容继承上游 **MIT** 许可，版权归 **XDTrees** 所有，见 [`plugin/LICENSE`](plugin/LICENSE)。
+- 仓库根目录下的 `lib/`、`package.json` 等内容继承上游 **MIT** 许可，版权归 **XDTrees** 所有，见 [`LICENSE`](LICENSE)。
 - `patches/`、`tools/`、本 README 为本项目新增部分，同样以 MIT 释出。
