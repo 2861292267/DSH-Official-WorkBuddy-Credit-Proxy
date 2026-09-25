@@ -1,0 +1,10 @@
+# Register the WorkBuddy XD Pool provider.
+#
+# Account discovery is read-only: it reuses the WorkBuddy desktop app's own
+# sign-in files and starts no flow of its own. This adapted edition can also
+# open the desktop client's own QR sign-in from the settings card — opt-in,
+# only on an explicit click, against the same gateway the desktop app uses.
+# Requests rotate across every discovered account.
+- insert:
+    - id: llm-workbuddy-xdpool
+      name: dsh-workbuddy-xdpool

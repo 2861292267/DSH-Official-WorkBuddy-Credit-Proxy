@@ -25,11 +25,12 @@
 
 ## 目录结构
 
-| 目录 | 内容 |
+| 位置 | 内容 |
 |---|---|
-| `plugin/` | **改造后的完整插件**（`lib/index.js`、`lib/client.js` 等），可直接放进 DSH profile |
+| 仓库根目录 | **插件本体**（`package.json` / `cordis.patch.yml` / `lib/` / `assets/`），`package.json` 已声明 `dsh.bundle`，可直接被 `dsh plugin add` 安装 |
 | `patches/` | 全部改动脚本（**幂等**，可对任意 1.6.1 原版重放） |
 | `tools/` | 重启验证、账号导入辅助脚本 |
+| `UPSTREAM-README.md` | 原作者 README（原样保留，含功能截图） |
 
 ---
 
@@ -82,7 +83,9 @@ GET  {网关}/v2/plugin/login/account?state=…  → 账号资料
 
 ```bash
 # 1. 装进 DSH profile（默认路径 ~/.dsh/profiles/desktop，也可用 --profile web）
-cp -r plugin ~/.dsh/profiles/<你的profile>/node_modules/dsh-workbuddy-xdpool
+#    仓库根目录就是插件本体，clone 下来即可用
+git clone https://github.com/2861292267/DSH-Official-WorkBuddy-Credit-Proxy \
+  ~/.dsh/profiles/<你的profile>/node_modules/dsh-workbuddy-xdpool
 
 # 2. 扫码功能需要二维码依赖（纯 JS，无原生编译）
 cd ~/.dsh/profiles/<你的profile>
