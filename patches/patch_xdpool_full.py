@@ -15,11 +15,14 @@
   client.js
     E. configForms.get("workbuddy-xdpool") -> get("llm-workbuddy-xdpool")（entry id 对齐）
 """
+import os
 import shutil
 import sys
 from pathlib import Path
 
-DESK = Path(r"C:\Users\ASUS\.dsh\profiles\desktop\node_modules\dsh-workbuddy-xdpool\lib")
+# 路径不写死用户名：默认 $HOME/.dsh/...，可用 DSH_PLUGIN_LIB 覆盖。
+DESK = Path(os.environ.get("DSH_PLUGIN_LIB")
+            or Path.home() / ".dsh" / "profiles" / "desktop" / "node_modules" / "dsh-workbuddy-xdpool" / "lib")
 IDX = DESK / "index.js"
 CLI = DESK / "client.js"
 

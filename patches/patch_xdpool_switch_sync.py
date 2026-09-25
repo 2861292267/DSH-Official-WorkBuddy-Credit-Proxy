@@ -16,10 +16,13 @@ dsh-workbuddy-xdpool：启动时自动从 workbuddy-switch 同步最新账号凭
 幂等：已打过补丁则跳过。原文件备份为 index.js.orig-switchsync。
 """
 from pathlib import Path
+import os
 import shutil
 import sys
 
-LIB = Path(r"C:\Users\ASUS\.dsh\profiles\desktop\node_modules\dsh-workbuddy-xdpool\lib")
+# 路径不写死用户名：默认 $HOME/.dsh/...，可用 DSH_PLUGIN_LIB 覆盖。
+LIB = Path(os.environ.get("DSH_PLUGIN_LIB")
+           or Path.home() / ".dsh" / "profiles" / "desktop" / "node_modules" / "dsh-workbuddy-xdpool" / "lib")
 TARGET = LIB / "index.js"
 BACKUP = LIB / "index.js.orig-switchsync"
 

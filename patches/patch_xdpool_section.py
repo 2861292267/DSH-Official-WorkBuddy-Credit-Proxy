@@ -13,12 +13,16 @@
   "settings.plugin.item"  -> "settings.section"        （inject 参数 + name 字段）
   key: "...", priority: 30 -> id: "...", order: 120, label: () => t("row.title")
 """
+import os
 import re
 import shutil
 import sys
 from pathlib import Path
 
-CLI = Path(r"C:\Users\ASUS\.dsh\profiles\desktop\node_modules\dsh-workbuddy-xdpool\lib\client.js")
+# 路径不写死用户名：默认 $HOME/.dsh/...，可用 DSH_PLUGIN_LIB 覆盖。
+LIB = Path(os.environ.get("DSH_PLUGIN_LIB")
+           or Path.home() / ".dsh" / "profiles" / "desktop" / "node_modules" / "dsh-workbuddy-xdpool" / "lib")
+CLI = LIB / "client.js"
 
 if not CLI.is_file():
     print("目标不存在:", CLI)

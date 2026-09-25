@@ -136,7 +136,14 @@ python patches/patch_xdpool_switch_sync.py # 启动从 switch 同步账号
 python patches/patch_xdpool_oauth_scan.py  # 卡片内扫码添加（依赖 patches/_frag_oauth_*.js）
 ```
 
-> ⚠️ 每个脚本里的路径常量按本机默认路径写死（`~/.dsh/profiles/desktop/...`），改环境时先改脚本头部常量。
+> **路径已不写死**：脚本按 `Path.home() / ".dsh" / "profiles" / "desktop" / ...` 推导插件目录，
+> 因此不含任何机器/用户名，换机器可直接用。profile 名不是 `desktop`、或插件装在别处时，
+> 用环境变量 `DSH_PLUGIN_LIB` 指向 `.../dsh-workbuddy-xdpool/lib` 即可覆盖。
+>
+> 两个 `tools/` 脚本按需传参，不再内嵌个人路径：
+> `import_switch_accounts.py <accounts.json>`（或设 `WB_SWITCH_EXPORT`）、
+> `restart_and_verify.py`（需设 `DSH_EXE` 指向 `DeepSeek Harness.exe`）。
+>
 > 改完 JS 务必做语法校验，否则插件加载失败会让应用起不来：
 > ```bash
 > ELECTRON_RUN_AS_NODE=1 "<DSH 安装目录>/DeepSeek Harness.exe" --check <复制出来的 .mjs>

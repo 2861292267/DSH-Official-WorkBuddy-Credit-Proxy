@@ -26,15 +26,19 @@ dsh-workbuddy-xdpool：给卡片加「OAuth 扫码添加账号」。
 幂等：已打过补丁则跳过。原文件备份为 *.orig-oauthscan。
 """
 from pathlib import Path
+import os
 import re
 import shutil
 import sys
 
-BASE = Path(r"D:\WorkBuddy文件\2026-09-25-10-38-26")
+# 片段与本脚本同目录（随仓库提交），因此按脚本自身位置定位，不写死任何绝对路径。
+BASE = Path(__file__).resolve().parent
 FRAG_HOST = BASE / "_frag_oauth_host.js"
 FRAG_CLIENT = BASE / "_frag_oauth_client.js"
 
-LIB = Path(r"C:\Users\ASUS\.dsh\profiles\desktop\node_modules\dsh-workbuddy-xdpool\lib")
+# 路径不写死用户名：默认 $HOME/.dsh/...，可用 DSH_PLUGIN_LIB 覆盖。
+LIB = Path(os.environ.get("DSH_PLUGIN_LIB")
+           or Path.home() / ".dsh" / "profiles" / "desktop" / "node_modules" / "dsh-workbuddy-xdpool" / "lib")
 INDEX = LIB / "index.js"
 CLIENT = LIB / "client.js"
 

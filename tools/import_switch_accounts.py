@@ -14,11 +14,25 @@
 """
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
-SRC = Path(r"D:\ASUS\桌面\wb-switch-accounts-2026-09-25.json")
+# 源文件路径不写死：用命令行参数传入，或设 WB_SWITCH_EXPORT 环境变量。
+#   python tools/import_switch_accounts.py <workbuddy-switch 导出的 JSON>
+# 这样脚本不含任何个人目录名，也能用于任意机器。
+if len(sys.argv) > 1:
+    SRC = Path(sys.argv[1]).expanduser()
+elif os.environ.get("WB_SWITCH_EXPORT"):
+    SRC = Path(os.environ["WB_SWITCH_EXPORT"]).expanduser()
+else:
+    sys.exit("用法：python tools/import_switch_accounts.py <accounts.json>\n"
+             "（或设置环境变量 WB_SWITCH_EXPORT 指向该文件）")
+
 DEST_DIR = Path(os.environ["APPDATA"]) / "CodeBuddyExtension" / "Data" / "Public" / "auth"
+
+if not SRC.is_file():
+    sys.exit(f"源文件不存在：{SRC}")
 
 src = json.loads(SRC.read_text(encoding="utf-8"))
 DEST_DIR.mkdir(parents=True, exist_ok=True)

@@ -9,12 +9,16 @@
   2. 注册处去掉红色调试框与 DEBUG 文案，只保留错误边界包裹
      （错误边界只在真出错时才渲染红字堆栈，正常情况下完全不出现）
 """
+import os
 import re
 import shutil
 import sys
 from pathlib import Path
 
-CLI = Path(r"C:\Users\ASUS\.dsh\profiles\desktop\node_modules\dsh-workbuddy-xdpool\lib\client.js")
+# 路径不写死用户名：默认 $HOME/.dsh/...，可用 DSH_PLUGIN_LIB 覆盖。
+LIB = Path(os.environ.get("DSH_PLUGIN_LIB")
+           or Path.home() / ".dsh" / "profiles" / "desktop" / "node_modules" / "dsh-workbuddy-xdpool" / "lib")
+CLI = LIB / "client.js"
 
 text = CLI.read_text(encoding="utf-8") if CLI.is_file() else None
 if text is None:

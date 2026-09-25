@@ -8,11 +8,15 @@
 修法：订阅内核广播的 `settings/document-updated` 事件（asar 里出现 21 次，
 是 0.1.7 的替代机制），在本插件 namespace 变更时重跑 applyConfigFromSource()。
 """
+import os
 import shutil
 import sys
 from pathlib import Path
 
-IDX = Path(r"C:\Users\ASUS\.dsh\profiles\desktop\node_modules\dsh-workbuddy-xdpool\lib\index.js")
+# 路径不写死用户名：默认 $HOME/.dsh/...，可用 DSH_PLUGIN_LIB 覆盖。
+LIB = Path(os.environ.get("DSH_PLUGIN_LIB")
+           or Path.home() / ".dsh" / "profiles" / "desktop" / "node_modules" / "dsh-workbuddy-xdpool" / "lib")
+IDX = LIB / "index.js"
 
 ANCHOR = "\tconst settingsService = ctx.settings;"
 

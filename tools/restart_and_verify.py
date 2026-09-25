@@ -3,13 +3,24 @@
 之前的教训：应用是单实例的，直接再启动一次不会加载新代码；
 必须先把所有 DeepSeek Harness 进程杀干净。
 """
+import os
 import subprocess
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-EXE = r"D:\DeepSeek Harness\DeepSeek Harness.exe"
-LOGS = Path(r"C:\Users\ASUS\AppData\Roaming\@deepseek-ai\dsh-desktop\logs")
+# 两个路径都不写死用户名/盘符：默认按当前用户推导，可用环境变量覆盖。
+#   DSH_EXE          —— 指向 "DeepSeek Harness.exe"（安装位置随机器而异，建议显式设置）
+#   DSH_DESKTOP_LOGS —— 指向 dsh-desktop 的日志目录
+EXE = os.environ.get("DSH_EXE")
+if not EXE:
+    sys.exit("请设置 DSH_EXE 指向 \"DeepSeek Harness.exe\"，例如：\n"
+             "  set DSH_EXE=D:\\DeepSeek Harness\\DeepSeek Harness.exe")
+
+LOGS = Path(os.environ.get("DSH_DESKTOP_LOGS")
+            or (Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+                / "@deepseek-ai" / "dsh-desktop" / "logs"))
 CNW = 0x08000000
 
 

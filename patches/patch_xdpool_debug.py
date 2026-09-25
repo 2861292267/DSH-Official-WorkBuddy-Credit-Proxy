@@ -8,11 +8,15 @@
 
 定位到真正的异常后，这个补丁会被撤掉（或保留标记去掉）。
 """
+import os
 import shutil
 import sys
 from pathlib import Path
 
-CLI = Path(r"C:\Users\ASUS\.dsh\profiles\desktop\node_modules\dsh-workbuddy-xdpool\lib\client.js")
+# 路径不写死用户名：默认 $HOME/.dsh/...，可用 DSH_PLUGIN_LIB 覆盖。
+LIB = Path(os.environ.get("DSH_PLUGIN_LIB")
+           or Path.home() / ".dsh" / "profiles" / "desktop" / "node_modules" / "dsh-workbuddy-xdpool" / "lib")
+CLI = LIB / "client.js"
 
 BOUNDARY_ANCHOR = "\t\tfunction PoolCard({ t, settingsScope }) {"
 
