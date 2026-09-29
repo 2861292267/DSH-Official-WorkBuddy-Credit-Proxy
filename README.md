@@ -1,4 +1,4 @@
-# DSH 官方版 · WorkBuddy 积分反代
+# RotaKit · DSH 官方版 WorkBuddy 积分池
 
 把本机已登录的 **WorkBuddy** 账号合并成一条**自动故障转移的模型池**，接入 **DeepSeek Harness 官方版（DSH Desktop）**，
 用 WorkBuddy 的积分驱动 GLM / DeepSeek / Kimi 等模型。
@@ -71,7 +71,7 @@ GET  {网关}/v2/plugin/login/account?state=…  → 账号资料
 
 > `code` 起点：**0 和 200 都算成功**。只认 0 会让成功时返回 200 的应答被误判为失效并丢弃令牌（详见上文「四、2026-09-25 追加」一节）。
 
-- 宿主侧新增两条路由：`POST /plugins/dsh-workbuddy-xdpool/oauth/start`、`GET .../oauth/poll`
+- 宿主侧新增两条路由：`POST /plugins/dsh-rotakit/oauth/start`、`GET .../oauth/poll`
 - 客户端在「账号使用方式」按钮区新增「添加账号」+ 登录链接面板（**命中即自动打开系统浏览器**，无需手点）+ 2.5 秒轮询
 - 登录链接直接取自上游返回的 `authUrl`；仅当其缺失时才回退用 `qrcode` 渲染二维码兜底。`qrcode` **用动态 `import()` 加载** —— 缺包只让兜底不可用，不会让整个插件加载失败
 - 扫到的账号存为 `workbuddy-scan-<id>.info`（独立前缀），**不会被 switch 同步覆盖**
@@ -112,7 +112,7 @@ GET  {网关}/v2/plugin/login/account?state=…  → 账号资料
 # 1. 装进 DSH profile（默认路径 ~/.dsh/profiles/desktop，也可用 --profile web）
 #    仓库根目录就是插件本体，clone 下来即可用
 git clone https://github.com/2861292267/DSH-Official-WorkBuddy-Credit-Proxy \
-  ~/.dsh/profiles/<你的profile>/node_modules/dsh-workbuddy-xdpool
+  ~/.dsh/profiles/<你的profile>/node_modules/dsh-rotakit
 
 # 2.（可选）二维码兜底依赖，纯 JS、无原生编译
 #    登录链接已能自动打开；只有上游不返回 authUrl 时才回退二维码，此时才需要它
@@ -120,7 +120,7 @@ cd ~/.dsh/profiles/<你的profile>
 pnpm add qrcode --config.minimumReleaseAge=0
 
 # 3. 确认 profile 的 bundles 里有它
-#    ~/.dsh/profiles/<你的profile>/package.json → dsh.profile.bundles 应含 "dsh-workbuddy-xdpool"
+#    ~/.dsh/profiles/<你的profile>/package.json → dsh.profile.bundles 应含 "dsh-rotakit"
 ```
 
 ### 若要自己重放补丁（对任意 1.6.1 原版）
@@ -138,7 +138,7 @@ python patches/patch_xdpool_oauth_scan.py  # 卡片内扫码添加（依赖 patc
 
 > **路径已不写死**：脚本按 `Path.home() / ".dsh" / "profiles" / "desktop" / ...` 推导插件目录，
 > 因此不含任何机器/用户名，换机器可直接用。profile 名不是 `desktop`、或插件装在别处时，
-> 用环境变量 `DSH_PLUGIN_LIB` 指向 `.../dsh-workbuddy-xdpool/lib` 即可覆盖。
+> 用环境变量 `DSH_PLUGIN_LIB` 指向 `.../dsh-rotakit/lib` 即可覆盖。
 >
 > 两个 `tools/` 脚本按需传参，不再内嵌个人路径：
 > `import_switch_accounts.py <accounts.json>`（或设 `WB_SWITCH_EXPORT`）、
@@ -157,10 +157,10 @@ DSH host 每次启动会开三个本地端口，其中 **`19387` 固定且无需
 插件自己的路由都挂在下面这一层，可以直接调，不必开界面：
 
 ```bash
-curl -s "http://127.0.0.1:19387/plugins/dsh-workbuddy-xdpool/status?region=cn"
+curl -s "http://127.0.0.1:19387/plugins/dsh-rotakit/status?region=cn"
 curl -s -X POST -H "Content-Type: application/json" -d '{"region":"cn"}' \
-     "http://127.0.0.1:19387/plugins/dsh-workbuddy-xdpool/oauth/start"
-curl -s "http://127.0.0.1:19387/plugins/dsh-workbuddy-xdpool/oauth/poll?state=<state>&region=cn"
+     "http://127.0.0.1:19387/plugins/dsh-rotakit/oauth/start"
+curl -s "http://127.0.0.1:19387/plugins/dsh-rotakit/oauth/poll?state=<state>&region=cn"
 ```
 
 `tools/restart_and_verify.py`：杀净所有同名进程 → 重启 → 观察 150 秒 → 判定（进程数稳定 + 日志无新增崩溃 + 内部端口 LISTENING）。

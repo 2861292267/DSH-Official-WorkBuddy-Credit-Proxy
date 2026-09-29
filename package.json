@@ -1,17 +1,17 @@
 {
-  "name": "dsh-workbuddy-xdpool",
-  "displayName": "DSH WorkBuddy XD Pool",
+  "name": "dsh-rotakit",
+  "displayName": "DSH RotaKit",
   "description": "Merge every locally signed-in WorkBuddy account into DeepSeek Harness as one auto-failing-over model pool (multi-account rotation, live credits, daily check-in and model catalog).",
-  "version": "1.6.1",
+  "version": "1.99.0",
   "license": "MIT",
-  "author": "XDTrees",
-  "homepage": "https://github.com/XDTrees/dsh-workbuddy-xdpool#readme",
+  "author": "XDTrees (upstream); adapted by 2861292267",
+  "homepage": "https://github.com/2861292267/DSH-Official-WorkBuddy-Credit-Proxy#readme",
   "bugs": {
-    "url": "https://github.com/XDTrees/dsh-workbuddy-xdpool/issues"
+    "url": "https://github.com/2861292267/DSH-Official-WorkBuddy-Credit-Proxy/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/XDTrees/dsh-workbuddy-xdpool.git"
+    "url": "git+https://github.com/2861292267/DSH-Official-WorkBuddy-Credit-Proxy.git"
   },
   "keywords": [
     "dsh-plugin",
@@ -29,7 +29,7 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "bin": {
-    "dsh-workbuddy-xdpool": "lib/bin.js"
+    "dsh-rotakit": "lib/bin.js"
   },
   "exports": {
     ".": {

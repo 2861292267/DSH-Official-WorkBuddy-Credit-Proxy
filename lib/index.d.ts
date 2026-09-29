@@ -181,7 +181,7 @@ export declare function expertChatEvents(expert: MarketExpert, conversationId: s
  * which the caller drives through an injected chat function so this module
  * stays testable without a network.
  *
- * @module dsh-workbuddy-xdpool/context-budget
+ * @module dsh-rotakit/context-budget
  */
 /** One OpenAI chat message, narrowed to the fields we must preserve. */
 interface ChatMessage {
@@ -1672,7 +1672,7 @@ export declare function formatRates(status: WorkBuddyStatus): string;
 //#region src/status-paths.d.ts
 /**
  * Node-free constants and types shared by the Host and browser halves of the
- * WorkBuddy XD Pool settings card.
+ * RotaKit settings card.
  *
  * Pool's runtime state already lives in `src/status.ts` (`buildStatus` /
  * `WorkBuddyStatus`); this module only carves the cross-domain (Host→browser)
@@ -1680,22 +1680,22 @@ export declare function formatRates(status: WorkBuddyStatus): string;
  * browser card renders. Route paths are plugin-owned and mounted on the Host's
  * same-origin web server (see `src/web-status.ts`).
  *
- * @module dsh-workbuddy-xdpool/status-paths
+ * @module dsh-rotakit/status-paths
  */
 /** Plugin-owned read-only pool status endpoint (account rows + models + shim). */
-export declare const POOL_STATUS_PATH = "/plugins/dsh-workbuddy-xdpool/status";
+export declare const POOL_STATUS_PATH = "/plugins/dsh-rotakit/status";
 /** Plugin-owned local account rescan endpoint (re-read desktop snapshots). */
-export declare const POOL_RESCAN_PATH = "/plugins/dsh-workbuddy-xdpool/accounts/rescan";
+export declare const POOL_RESCAN_PATH = "/plugins/dsh-rotakit/accounts/rescan";
 /** Plugin-owned cooldown reset endpoint (clear all 429 cooldowns). */
-export declare const POOL_RESET_COOLDOWN_PATH = "/plugins/dsh-workbuddy-xdpool/cooldowns/reset";
+export declare const POOL_RESET_COOLDOWN_PATH = "/plugins/dsh-rotakit/cooldowns/reset";
 /** Plugin-owned daily check-in action endpoint (claim today's reward). */
-export declare const POOL_CHECKIN_PATH = "/plugins/dsh-workbuddy-xdpool/checkin";
+export declare const POOL_CHECKIN_PATH = "/plugins/dsh-rotakit/checkin";
 /** Plugin-owned model-selection save endpoint (writes the settings section). */
-export declare const POOL_MODELS_SAVE_PATH = "/plugins/dsh-workbuddy-xdpool/models/save";
+export declare const POOL_MODELS_SAVE_PATH = "/plugins/dsh-rotakit/models/save";
 /** Run one automation job immediately, so the card can verify it on demand. */
-export declare const POOL_AUTOMATION_RUN_PATH = "/plugins/dsh-workbuddy-xdpool/automation/run";
+export declare const POOL_AUTOMATION_RUN_PATH = "/plugins/dsh-rotakit/automation/run";
 /** Set or clear one account's reserved-credit floor. */
-export declare const POOL_CREDIT_RESERVE_PATH = "/plugins/dsh-workbuddy-xdpool/accounts/credit-reserve";
+export declare const POOL_CREDIT_RESERVE_PATH = "/plugins/dsh-rotakit/accounts/credit-reserve";
 /** One pool account's row, token-free. */
 interface PoolWebAccount {
   id: string;
@@ -2021,11 +2021,11 @@ export declare function registerPoolStatusRoute(ctx: Context$1, deps: PoolStatus
 //#endregion
 //#region src/index.d.ts
 /** Stable Cordis plugin name. */
-export declare const name = "llm-workbuddy-xdpool";
+export declare const name = "llm-rotakit";
 /** The model registry required before the provider can register. */
 export declare const inject: string[];
 /**
- * Settings namespace for the WorkBuddy XD Pool card. Registering a section here
+ * Settings namespace for the RotaKit card. Registering a section here
  * is what makes the provider appear on the Models settings page and causes the
  * Host to mount the plugin's client card under Plugin configuration — exactly
  * the mechanism the single-account connector uses.
