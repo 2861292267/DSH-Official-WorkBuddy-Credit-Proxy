@@ -751,8 +751,26 @@ interface WorkBuddyAccount {
    * here; `hy3`/`glm-*` on the same account keep serving.
    */
   modelCooldowns: Record<string, number>;
-  /** Consecutive rate-limit hits, for diagnostics. */
+  /**
+   * Rate-limit hits for diagnostics: how many times this account was cooled
+   * because the upstream returned a rate-limit verdict. Strictly 429-family
+   * refusals — an upstream 5xx rotates the account but is NOT counted here, so
+   * this number keeps its original meaning ("this account keeps getting
+   * rate-limited") instead of doubling as a generic failure tally.
+   */
   rateLimitHits: number;
+  /**
+   * Upstream gateway failures (5xx, including Tencent's intermittent 550) that
+   * made the pool rotate away from this account. Kept apart from
+   * {@link rateLimitHits} on purpose: a 5xx is an upstream-side fault that a
+   * different account usually survives, so the two failures call for opposite
+   * responses (rotate vs. back off) and must not share one counter.
+   *
+   * In-memory only and never reset by {@link WorkBuddyPool.resetCooldowns}:
+   * clearing a cooldown is not evidence that the upstream stopped failing, and
+   * this counter exists to show whether a specific account is a repeat offender.
+   */
+  serverErrorHits: number;
 }
 /**
  * Platform-default directories holding the desktop app's auth files.
