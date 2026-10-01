@@ -1,0 +1,220 @@
+diff --git a/lib/client.js b/lib/client.js
+index 44cc6d8..55a9956 100644
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -102,7 +102,7 @@ window.__ModuleLoader__.load({
+ .dsm-btn-primary:hover:not(:disabled){opacity:.9}
+ 
+ /* Body layout: status row + accounts list + models list. */
+-.dsm-workbuddy-xdpool-usage{display:flex;flex-direction:column;gap:14px;margin:0;padding:14px 0 4px}
++.dsm-workbuddy-xdpool-usage{display:flex;flex-direction:column;gap:10px;margin:0;padding:12px 0 4px}
+ /* Region tabs: two independent suppliers, one shown at a time. */
+ .dsm-workbuddy-xdpool-tabs{display:flex;gap:6px;padding:4px;border:1px solid var(--dsw-alias-border-l2,#3a3d45);border-radius:10px;background:var(--dsw-alias-bg-layer-3,#2a2c33)}
+ /* Empty-region guide: steps for signing in on the other gateway. */
+@@ -128,18 +128,21 @@ window.__ModuleLoader__.load({
+ /* Distribution switch: priority (drain one) vs round-robin (spread). */
+ .dsm-workbuddy-xdpool-dist{display:flex;flex-direction:column;gap:6px;padding-left:19px;margin-top:8px}
+ .dsm-workbuddy-xdpool-dist-title{color:var(--dsw-alias-label-tertiary,#9aa0a8);font-size:12px;line-height:18px}
+-.dsm-workbuddy-xdpool-dist-option{appearance:none;font:inherit;cursor:pointer;text-align:left;display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:44px;border:1px solid var(--dsw-alias-border-l2,#3a3d45);border-radius:8px;padding:6px 10px;background:transparent;color:var(--dsw-alias-label-tertiary,#9aa0a8);transition:color .16s,border-color .16s,background .16s}
+-.dsm-workbuddy-xdpool-dist-option:hover:not(:disabled):not(.dsm-workbuddy-xdpool-dist-option-active){color:var(--dsw-alias-label-primary,#e6e6e6);border-color:var(--dsw-alias-label-dimmed,#777)}
+-.dsm-workbuddy-xdpool-dist-option:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#5686fe);outline-offset:1px}
+-.dsm-workbuddy-xdpool-dist-option-active{background:var(--dsw-alias-state-success-subtle,rgba(34,160,107,.14));border-color:var(--dsw-alias-state-success-primary,#22a06b);color:var(--dsw-alias-state-success-primary,#22a06b)}
++.dsm-workbuddy-xdpool-dist-option{appearance:none;font:inherit;cursor:pointer;text-align:left;display:flex;flex-direction:column;justify-content:center;gap:1px;min-height:40px;border:0;border-radius:9px;padding:6px 10px;background:var(--dsw-alias-bg-layer-2,#25262b);color:var(--dsw-alias-label-tertiary,#9aa0a8);transition:color .16s,background .16s}
++.dsm-workbuddy-xdpool-dist-option:hover:not(:disabled):not(.dsm-workbuddy-xdpool-dist-option-active){color:var(--dsw-alias-label-primary,#e6e6e6);background:color-mix(in oklab, var(--dsw-alias-label-primary,#e6e6e6) 7%, var(--dsw-alias-bg-layer-2,#25262b))}
++.dsm-workbuddy-xdpool-dist-option:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#5686fe);outline-offset:-2px}
++.dsm-workbuddy-xdpool-dist-option-active{background:color-mix(in oklab, var(--dsw-alias-state-success-primary,#22a06b) 17%, var(--dsw-alias-bg-layer-2,#25262b));color:var(--dsw-alias-state-success-primary,#22a06b);box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--dsw-alias-state-success-primary,#22a06b) 45%, transparent)}
+ .dsm-workbuddy-xdpool-dist-option:disabled{cursor:default;opacity:.6}
+ .dsm-workbuddy-xdpool-dist-option-name{font-size:11px;line-height:16px;font-weight:600}
+ .dsm-workbuddy-xdpool-dist-option-hint{font-size:10px;line-height:14px;opacity:.8}
+-.dsm-workbuddy-xdpool-dist-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
++/* A segmented control, not three cards: the options are mutually exclusive, and
++   three separately bordered boxes with gaps read as three unrelated choices.
++   The 1px gap over a border-coloured background is the only divider. */
++.dsm-workbuddy-xdpool-dist-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;padding:1px;border-radius:10px;background:color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 55%, transparent)}
+ .dsm-workbuddy-xdpool-usage-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+ 
+ /* Account list (each account = a labeled subpanel, same as dingminhua). */
+-.dsm-workbuddy-xdpool-accounts{display:flex;flex-direction:column;gap:14px;border-top:1px solid var(--dsw-alias-border-l2,#36373b);padding-top:14px}
++.dsm-workbuddy-xdpool-accounts{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--dsw-alias-border-l2,#36373b);padding-top:12px}
+ .dsm-workbuddy-xdpool-accounts-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+ /* "In use now": answers which account is serving without scanning every row. */
+ /* A hairline + tint reads as status; a filled bar would read as a call to action. */
+@@ -150,14 +153,30 @@ window.__ModuleLoader__.load({
+ .dsm-workbuddy-xdpool-current-note{color:var(--dsw-alias-state-warning-primary,#d97706);font-size:11px;line-height:16px}
+ .dsm-workbuddy-xdpool-accounts-title{margin:0;color:var(--dsw-alias-label-primary,#e6e6e6);font-size:14px;font-weight:600;line-height:20px}
+ .dsm-workbuddy-xdpool-accounts-summary{margin:2px 0 0;color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:18px}
+-.dsm-workbuddy-xdpool-account{display:flex;flex-direction:column;gap:0;padding:0;border:1px solid color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 55%, transparent);border-radius:16px;background:var(--dsw-alias-bg-layer-2,#24262c);box-shadow:0 1px 3px rgba(0,0,0,.04);overflow:hidden}
++/* The whole heading row is the collapse control, so the button needs the reset a
++   bare <button> never gets. Without it the title renders with the host's button
++   chrome and the chevron sits in the browser's default padding. */
++.dsm-workbuddy-xdpool-accounts-toggle{appearance:none;font:inherit;cursor:pointer;display:flex;align-items:center;gap:7px;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left}
++.dsm-workbuddy-xdpool-accounts-toggle:hover .dsm-workbuddy-xdpool-accounts-title{color:var(--dsw-alias-brand-primary,#5686fe)}
++.dsm-workbuddy-xdpool-accounts-toggle:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#5686fe);outline-offset:2px;border-radius:6px}
++/* Both panels participate in the grid, so neither may force a column wider. */
++.dsm-workbuddy-xdpool-panel-packages,
++.dsm-workbuddy-xdpool-health-text{min-width:0}
++/* Gateway-fault count: same meta line as the rest, but it is a warning. */
++.dsm-workbuddy-xdpool-account-meta-warn{color:var(--dsw-alias-state-warning-primary,#d97706)}
++/* Per-job detail lines are the longest strings on the card; let them wrap
++   instead of stretching the automation panel. */
++.dsm-workbuddy-xdpool-auto-job-detail{color:var(--dsw-alias-label-tertiary,#9aa0a8);font-size:11px;line-height:16px;min-width:0;word-break:break-word}
++/* Keeps the run button on one line while the automation switch takes the slack. */
++.dsm-workbuddy-xdpool-auto-run{flex:none}
++.dsm-workbuddy-xdpool-account{display:flex;flex-direction:column;gap:0;padding:0;border:1px solid color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 50%, transparent);border-radius:10px;background:var(--dsw-alias-bg-layer-2,#24262c);overflow:hidden}
+ /* Body row inside a card: identity on the left, credit panels on the right. */
+ /* flex-wrap lets the panels drop below on a narrow card instead of squeezing both. */
+ .dsm-workbuddy-xdpool-account-body{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+-.dsm-workbuddy-xdpool-account-copy{display:flex;flex-direction:column;align-items:flex-start;gap:6px;flex:1 1 200px;min-width:0;padding:14px 16px;justify-content:center}
++.dsm-workbuddy-xdpool-account-copy{display:flex;flex-direction:column;align-items:flex-start;gap:5px;flex:1 1 200px;min-width:0;padding:10px 12px;justify-content:center}
+ .dsm-workbuddy-xdpool-account-label{color:var(--dsw-alias-label-primary,#e6e6e6);font-size:14px;font-weight:600;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .dsm-workbuddy-xdpool-account-head .dsm-workbuddy-xdpool-account-toggle{margin-left:auto}
+-.dsm-workbuddy-xdpool-account-head{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 16px;border-bottom:1px solid color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 45%, transparent)}
++.dsm-workbuddy-xdpool-account-head{display:flex;align-items:center;gap:9px;min-width:0;padding:9px 12px;border-bottom:1px solid color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 45%, transparent)}
+ /* Account switched off on the card: still listed (so it can be turned back on) but visually muted. */
+ .dsm-workbuddy-xdpool-account-off{opacity:.55}
+ /* Small pill switch: "in rotation" vs "off". Native checkbox styled by the label. */
+@@ -212,14 +231,18 @@ window.__ModuleLoader__.load({
+ .dsm-workbuddy-xdpool-trend-total{color:var(--dsw-alias-label-secondary,#c6c9d0);font-size:12px;line-height:18px;font-variant-numeric:tabular-nums}
+ .dsm-workbuddy-xdpool-trend-bars{display:flex;align-items:flex-end;gap:3px;height:44px}
+ .dsm-workbuddy-xdpool-trend-bar{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+-.dsm-workbuddy-xdpool-trend-fill{width:100%;border-radius:3px 3px 0 0;background:var(--dsw-alias-brand-primary,#5686fe);min-height:2px;transition:height .3s}
++/* The brand token resolves to a near-black in this host theme, so a bar drawn with
++   it reads as ink rather than as data. The success token is the one this card has
++   already been shown to render as a colour, so the bars use it and the newest day
++   is the fully opaque one. */
++.dsm-workbuddy-xdpool-trend-fill{width:100%;border-radius:3px 3px 0 0;background:color-mix(in oklab, var(--dsw-alias-state-success-primary,#22a06b) 50%, transparent);min-height:2px;transition:height .3s}
+ .dsm-workbuddy-xdpool-trend-fill-zero{background:color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 80%, transparent)}
+-.dsm-workbuddy-xdpool-trend-fill-today{background:var(--dsw-alias-brand-primary,#5686fe);box-shadow:0 0 0 1px color-mix(in oklab, var(--dsw-alias-brand-primary,#5686fe) 45%, transparent)}
++.dsm-workbuddy-xdpool-trend-fill-today{background:var(--dsw-alias-state-success-primary,#22a06b);box-shadow:0 0 0 1px color-mix(in oklab, var(--dsw-alias-state-success-primary,#22a06b) 45%, transparent)}
+ .dsm-workbuddy-xdpool-trend-axis{display:flex;justify-content:space-between;color:var(--dsw-alias-label-dimmed,#8b9099);font-size:10px;line-height:14px;font-variant-numeric:tabular-nums}
+ 
+ /* Two-column stats: packages on the left, total + check-in on the right. */
+ .dsm-workbuddy-xdpool-stats{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(168px,.85fr);gap:0;flex:1 1 420px;min-width:0;max-width:660px;border-left:1px solid color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 45%, transparent)}
+-.dsm-workbuddy-xdpool-panel{display:flex;flex-direction:column;min-width:0;gap:7px;padding:14px 16px}
++.dsm-workbuddy-xdpool-panel{display:flex;flex-direction:column;min-width:0;gap:6px;padding:10px 12px}
+ .dsm-workbuddy-xdpool-panel-title{color:var(--dsw-alias-label-tertiary,#999);font-size:11px;line-height:16px;letter-spacing:.03em;text-transform:uppercase;font-weight:600}
+ .dsm-workbuddy-xdpool-panel-empty{color:var(--dsw-alias-label-tertiary,#999);font-size:14px;line-height:20px}
+ .dsm-workbuddy-xdpool-panel-error{color:var(--dsw-alias-state-error-primary,#ef4444);font-size:12px;line-height:18px;word-break:break-word}
+@@ -243,12 +266,12 @@ window.__ModuleLoader__.load({
+ .dsm-workbuddy-xdpool-total-value{color:var(--dsw-alias-state-success-primary,#22a06b);font-size:28px;line-height:32px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;font-variant-numeric:tabular-nums}
+ 
+ /* Model directory list. */
+-.dsm-workbuddy-xdpool-models{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--dsw-alias-border-l2,#36373b);padding-top:14px}
++.dsm-workbuddy-xdpool-models{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--dsw-alias-border-l2,#36373b);padding-top:12px}
+ .dsm-workbuddy-xdpool-models-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+ .dsm-workbuddy-xdpool-models-title{margin:0;color:var(--dsw-alias-label-primary,#e6e6e6);font-size:14px;font-weight:600;line-height:20px}
+ .dsm-workbuddy-xdpool-models-summary{margin:2px 0 0;color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:18px}
+ .dsm-workbuddy-xdpool-model-list{display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-l2,#36373b);border-radius:10px;overflow:hidden}
+-.dsm-workbuddy-xdpool-model{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;padding:10px 12px;background:var(--dsw-alias-bg-layer-2,#232529);transition:opacity .16s}
++.dsm-workbuddy-xdpool-model{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:8px 11px;background:var(--dsw-alias-bg-layer-2,#232529);transition:opacity .16s}
+ .dsm-workbuddy-xdpool-model+.dsm-workbuddy-xdpool-model{border-top:1px solid var(--dsw-alias-border-l2,#36373b)}
+ .dsm-workbuddy-xdpool-model-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+ .dsm-workbuddy-xdpool-model-copy{display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:wrap}
+@@ -261,13 +284,13 @@ window.__ModuleLoader__.load({
+ /* Model row: checkbox + image toggle + context-budget radios. */
+ .dsm-workbuddy-xdpool-model-off{opacity:.55}
+ .dsm-workbuddy-xdpool-model-check{display:flex;align-items:center;gap:8px;min-width:0;flex:1;cursor:pointer}
+-.dsm-workbuddy-xdpool-model-check input{margin:0;accent-color:var(--dsw-alias-brand-primary,#5686fe);flex:none}
++.dsm-workbuddy-xdpool-model-check input{margin:0;accent-color:var(--dsw-alias-state-success-primary,#22a06b);flex:none}
+ .dsm-workbuddy-xdpool-model-controls{display:flex;align-items:center;gap:10px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+ .dsm-workbuddy-xdpool-model-image{display:inline-flex;align-items:center;gap:5px;flex:none;cursor:pointer;color:var(--dsw-alias-label-secondary,#c6c9d0);font-size:11px;line-height:16px}
+-.dsm-workbuddy-xdpool-model-image input{margin:0;accent-color:var(--dsw-alias-brand-primary,#5686fe)}
++.dsm-workbuddy-xdpool-model-image input{margin:0;accent-color:var(--dsw-alias-state-success-primary,#22a06b)}
+ .dsm-workbuddy-xdpool-model-budget{display:flex;align-items:center;gap:9px;flex:none;margin:0;padding:0;border:0;color:var(--dsw-alias-label-secondary,#c6c9d0);font-size:11px;line-height:16px}
+ .dsm-workbuddy-xdpool-model-budget label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+-.dsm-workbuddy-xdpool-model-budget input{margin:0;accent-color:var(--dsw-alias-brand-primary,#5686fe)}
++.dsm-workbuddy-xdpool-model-budget input{margin:0;accent-color:var(--dsw-alias-state-success-primary,#22a06b)}
+ .dsm-workbuddy-xdpool-models-heading{display:flex;flex-direction:column;gap:2px;min-width:0}
+ .dsm-workbuddy-xdpool-models-actions{display:flex;align-items:center;gap:8px;flex:none}
+ 
+@@ -299,24 +322,27 @@ window.__ModuleLoader__.load({
+ }
+ 
+ /* Automation panel: schedule and last-run summary, collapsed behind a switch. */
+-.dsm-workbuddy-xdpool-auto{margin-top:12px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,#36373b);border-radius:10px;background:var(--dsw-alias-bg-module-platform,#202126)}
++.dsm-workbuddy-xdpool-auto{margin-top:10px;padding:9px 11px;border:1px solid var(--dsw-alias-border-l2,#36373b);border-radius:9px;background:var(--dsw-alias-bg-module-platform,#202126)}
+ .dsm-workbuddy-xdpool-auto-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+ .dsm-workbuddy-xdpool-auto-title{color:var(--dsw-alias-label-primary,#e8e8ea);font-size:12px;font-weight:600}
+ .dsm-workbuddy-xdpool-auto-switch{padding:3px 12px;border:1px solid var(--dsw-alias-border-l2,#36373b);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#c6c9d0);font-size:12px;cursor:pointer;transition:color .16s,border-color .16s,background .16s}
+ .dsm-workbuddy-xdpool-auto-switch:hover:not(:disabled){border-color:var(--dsw-alias-label-dimmed,#777);color:var(--dsw-alias-label-primary,#e8e8ea)}
+ .dsm-workbuddy-xdpool-auto-switch:disabled{opacity:.5;cursor:not-allowed}
+-.dsm-workbuddy-xdpool-auto-switch-on{border-color:#28c8b4;color:#28c8b4;background:rgba(40,200,180,.12)}
++/* One accent, not three. These were hardcoded teal, which matched neither the
++   theme nor the green used everywhere else on the card. */
++.dsm-workbuddy-xdpool-auto-switch-on{border-color:var(--dsw-alias-state-success-primary,#22a06b);color:var(--dsw-alias-state-success-primary,#22a06b);background:color-mix(in oklab, var(--dsw-alias-state-success-primary,#22a06b) 12%, transparent)}
+ .dsm-workbuddy-xdpool-auto-hint{margin:6px 0 0;color:var(--dsw-alias-label-secondary,#c6c9d0);font-size:12px;line-height:1.6}
+-.dsm-workbuddy-xdpool-auto-total{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:8px;padding:6px 8px;border-radius:8px;background:rgba(40,200,180,.08);font-size:11px}
+ .dsm-workbuddy-xdpool-auto-total-label{color:var(--dsw-alias-label-secondary,#c6c9d0);font-size:12px}
+-.dsm-workbuddy-xdpool-auto-total{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding:6px 8px;border-radius:8px;background:rgba(40,200,180,.08);font-size:11px}
++/* One definition only: this was declared twice, and the two declarations set
++   competing layout directions that the cascade then merged into neither. */
++.dsm-workbuddy-xdpool-auto-total{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding:6px 8px;border-radius:8px;background:color-mix(in oklab, var(--dsw-alias-state-success-primary,#22a06b) 8%, transparent);font-size:11px}
+ .dsm-workbuddy-xdpool-auto-total-list{display:flex;flex-direction:column;gap:2px}
+-.dsm-workbuddy-xdpool-auto-total-row{color:#28c8b4;font-variant-numeric:tabular-nums}
++.dsm-workbuddy-xdpool-auto-total-row{color:var(--dsw-alias-state-success-primary,#22a06b);font-variant-numeric:tabular-nums}
+ .dsm-workbuddy-xdpool-earned{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--dsw-alias-border-l2,#36373b);font-size:11px}
+ .dsm-workbuddy-xdpool-earned-label{color:var(--dsw-alias-label-secondary,#c6c9d0);font-size:12px}
+ .dsm-workbuddy-xdpool-earned-list{display:flex;flex-direction:column;gap:2px}
+-.dsm-workbuddy-xdpool-earned-row{color:#28c8b4;font-variant-numeric:tabular-nums}
+-.dsm-workbuddy-xdpool-earned-value{color:#28c8b4;font-weight:600;font-variant-numeric:tabular-nums}
++.dsm-workbuddy-xdpool-earned-row{color:var(--dsw-alias-state-success-primary,#22a06b);font-variant-numeric:tabular-nums}
++.dsm-workbuddy-xdpool-earned-value{color:var(--dsw-alias-state-success-primary,#22a06b);font-weight:600;font-variant-numeric:tabular-nums}
+ .dsm-workbuddy-xdpool-auto-jobs{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+ .dsm-workbuddy-xdpool-auto-job{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--dsw-alias-label-secondary,#c6c9d0)}
+ .dsm-workbuddy-xdpool-auto-job-name{flex:0 0 auto;min-width:72px;color:var(--dsw-alias-label-primary,#e8e8ea);font-weight:500}
+@@ -344,19 +370,28 @@ window.__ModuleLoader__.load({
+ /* Headline usage bar: four equal columns over one rounded surface, sitting at
+    the very top of the card body. Every colour comes from the host tokens, so the
+    same rules read correctly on the dark module surface and on a light theme. */
+-.dsm-workbuddy-xdpool-usagebar{display:flex;align-items:stretch;gap:0;margin:12px 0 0;padding:0;border:1px solid var(--dsw-alias-border-l2,#36373b);border-radius:12px;background:var(--dsw-alias-bg-layer-2,#25262b);overflow:hidden}
+-.dsm-workbuddy-xdpool-usagebar-cell{display:flex;flex-direction:column;gap:5px;flex:1 1 0;min-width:0;padding:11px 14px}
++/* A 1px gap over a border-coloured background draws the separators, which keeps
++   the four tiles flush instead of nesting a border inside a bordered strip. */
++.dsm-workbuddy-xdpool-usagebar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:10px 0 0;padding:0;border:0;border-radius:12px;background:color-mix(in oklab, var(--dsw-alias-border-l2,#36373b) 60%, transparent);overflow:hidden}
++.dsm-workbuddy-xdpool-usagebar-cell{display:flex;flex-direction:column;gap:4px;min-width:0;padding:9px 11px;background:var(--dsw-alias-bg-layer-2,#25262b)}
++/* Green rather than the brand token: in this host theme the brand token resolves
++   to a neutral, so an accent built on it renders as plain grey. The success token
++   is already this card's colour for credit figures, so the headline agrees with
++   the rest of the card instead of fighting it.
++   The four columns stay equal on purpose. Widening this one squeezed the other
++   three until a nine-character figure like "13,040.00" no longer fitted, which is
++   what produced "13,040....". The accent identifies the headline; it does not need
++   extra width to do it. */
++.dsm-workbuddy-xdpool-usagebar-cell-lead{background:color-mix(in oklab, var(--dsw-alias-state-success-primary,#22a06b) 15%, var(--dsw-alias-bg-layer-2,#25262b));box-shadow:inset 0 3px 0 0 var(--dsw-alias-state-success-primary,#22a06b)}
+ .dsm-workbuddy-xdpool-usagebar-head{display:flex;align-items:center;gap:5px;min-width:0}
+ .dsm-workbuddy-xdpool-usagebar-glyph{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary,#999)}
+-.dsm-workbuddy-xdpool-usagebar-label{color:var(--dsw-alias-label-tertiary,#999);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+-.dsm-workbuddy-xdpool-usagebar-value{color:var(--dsw-alias-label-primary,#e6e6e6);font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+-.dsm-workbuddy-xdpool-usagebar-cell + .dsm-workbuddy-xdpool-usagebar-cell{border-left:1px solid color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 60%, transparent)}
++.dsm-workbuddy-xdpool-usagebar-cell-lead .dsm-workbuddy-xdpool-usagebar-glyph{color:var(--dsw-alias-state-success-primary,#22a06b)}
++.dsm-workbuddy-xdpool-usagebar-label{color:var(--dsw-alias-label-tertiary,#999);font-size:11.5px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
++.dsm-workbuddy-xdpool-usagebar-value{color:var(--dsw-alias-label-primary,#e6e6e6);font-size:20px;line-height:24px;font-weight:700;letter-spacing:-.015em;white-space:nowrap;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
++.dsm-workbuddy-xdpool-usagebar-cell-lead .dsm-workbuddy-xdpool-usagebar-value{color:var(--dsw-alias-state-success-primary,#22a06b);font-size:21px;font-weight:800}
+ .dsm-workbuddy-xdpool-usagebar-note{margin:6px 2px 0;color:var(--dsw-alias-label-tertiary,#9aa0a8);font-size:11px;line-height:16px}
+ @media (max-width:760px){
+-  .dsm-workbuddy-xdpool-usagebar{flex-wrap:wrap}
+-  .dsm-workbuddy-xdpool-usagebar-cell{flex:1 1 44%}
+-  .dsm-workbuddy-xdpool-usagebar-cell:nth-child(odd){border-left:0}
+-  .dsm-workbuddy-xdpool-usagebar-cell:nth-child(n+3){border-top:1px solid color-mix(in oklab, var(--dsw-alias-border-l2,#3a3d45) 60%, transparent)}
++  .dsm-workbuddy-xdpool-usagebar{grid-template-columns:repeat(2,minmax(0,1fr))}
+ }
+ `.trim();
+ 		//#endregion
+@@ -1725,7 +1760,7 @@ window.__ModuleLoader__.load({
+ 										wordBreak: "break-all",
+ 										fontSize: "13px",
+ 										lineHeight: "20px",
+-										color: "var(--dsw-alias-brand-primary, #5686fe)"
++										color: "var(--dsw-alias-state-success-primary, #22a06b)"
+ 									},
+ 									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+ 										style: {
+@@ -2406,7 +2441,7 @@ window.__ModuleLoader__.load({
+ 				className: "dsm-workbuddy-xdpool-usagebar",
+ 				title: hint === "" ? void 0 : hint,
+ 				children: cells.map((cell) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-					className: "dsm-workbuddy-xdpool-usagebar-cell",
++					className: cell.key === "remaining" ? "dsm-workbuddy-xdpool-usagebar-cell dsm-workbuddy-xdpool-usagebar-cell-lead" : "dsm-workbuddy-xdpool-usagebar-cell",
+ 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+ 						className: "dsm-workbuddy-xdpool-usagebar-head",
+ 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
