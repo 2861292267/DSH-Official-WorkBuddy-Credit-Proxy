@@ -105,6 +105,8 @@ The card's per-model queue table keeps accumulating samples; the conclusion firm
 │   ├── client.js       Settings card (build output)
 │   ├── bin.js          CLI (build output)
 │   └── index.d.ts      Types (build output)
+├── patches/            Scripts that turned upstream 1.6.1 into this (idempotent, replayable)
+├── tools/              Account import and restart-verification helpers
 ├── cordis.patch.yml    Bundle registration patch
 ├── package.json        Manifest (dsh.bundle and dsh.client live here)
 ├── screenshots.json    Card screenshot list
@@ -116,6 +118,11 @@ The card's per-model queue table keeps accumulating samples; the conclusion firm
 ```
 
 **All four `lib/` outputs ship in the repository**, so installing needs no build step.
+
+`patches/` and `tools/` are **development-time scripts** and are not needed to install or
+run: `patches/` records how this was derived from upstream 1.6.1 (idempotent; each script
+backs the original up as `*.orig-<tag>` first), and `tools/` holds small account-import and
+restart-verification helpers. **Day to day, only `lib/` matters.**
 
 ---
 
