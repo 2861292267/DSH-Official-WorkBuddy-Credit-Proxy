@@ -4,6 +4,8 @@
 
 你在桌面端登过几个号，池里就有几个号 —— 不用手动录入，不用一个个切换。哪个号限流了、积分用完了、令牌失效了，请求自动落到下一个能用的号上。
 
+池子同时说 **OpenAI Chat / OpenAI Responses / Anthropic Messages** 三种协议，所以 DSH、Codex、Claude Code 以及任何 OpenAI / Anthropic SDK 客户端都能直接接进来，共用同一个账号池。
+
 > **来源与署名。** RotaKit 是独立维护的改编版，基于 [`XDTrees/dsh-workbuddy-xdpool`](https://github.com/XDTrees/dsh-workbuddy-xdpool)（MIT，作者 **XDTrees**）。账号凭据解密移植自 [`dingminhua/dsh-connect-workbuddy`](https://github.com/dingminhua/dsh-connect-workbuddy)，shim 的加固与错误映射参照 [`corrinehu/dsh-workbuddy-connect`](https://github.com/corrinehu/dsh-workbuddy-connect)，两者均为 MIT。原版文档见 [`UPSTREAM-README.md`](UPSTREAM-README.md)。
 
 ---
@@ -72,12 +74,48 @@
 - **状态标记**：冷却中、需重新登录、额度不足、已保留 —— 每种都有自己的原因与对策
 - **一键清除**：只要有任何可清除状态（冷却 / 熔断 / 按模型缓存）按钮就出现，点了真的清干净
 
-### 六、请求链路
+### 六、协议兼容
+
+池对外同时说**三种协议**，三条路由共用同一套账号轮换、冷却、熔断、积分门槛与上下文压缩：
+
+| 协议 | 路径 | 谁在用 |
+|---|---|---|
+| **OpenAI Chat** | `/v1/chat/completions` | DSH 本体、普通客户端 |
+| **OpenAI Responses** | `/v1/responses` | **Codex**、任何 Responses 客户端 |
+| **Anthropic Messages** | `/v1/messages` | **Claude Code**、Anthropic SDK |
+
+翻译层与调度层是分开的：新协议只负责把请求转成 chat 体、把回答转回去，**调度逻辑一行都不重复**。
+好处是改轮换策略时三条路由同时生效，不会有人掉队；协议出 bug 也只会是翻译错，不会串到调度。
+
+几个不显然的实现点（都是实测踩出来的）：
+
+- **工具调用在 `response.output` 里出现两次** —— Codex 靠读最终响应判断「这轮要不要继续」，
+  只在流事件里发 `output_item.done` 而 `output` 数组里没有，Codex 会认为模型只是说了句话，
+  于是**结束回合等人输入**，表现为「任务做到一半停了」
+- **工具调用的「调用」与「结果」先配对再发送** —— 上游拒绝「结果早于调用」和「调用没有结果」，
+  而客户端传来的历史里两种都真实存在（会话被中断、被裁剪过）
+- **对话不以工具轮开头** —— 裁剪过的历史第一条可能就是助手工具调用，上游直接拒；
+  补一条用户轮在最前面，而不是删掉工具调用（后面的结果是真的）
+- **Anthropic 的 `stop_reason` 不是装饰** —— 模型要用工具时必须报 `tool_use`，
+  报成 `end_turn` 客户端会认为回合结束，刚拿到的 `tool_use` 块永远不会被执行
+- **`max_tokens` 有地板** —— 池里是**推理模型**，思考计入 `max_tokens`。
+  实测（同一提示词，各 6 次）：`max_tokens=16` 时只有 1/6 能产出内容、`64` 时 3/6、`256` 以上 6/6 ——
+  预算被思考吃光时上游返回 `finish_reason: length` 且 **`content` 完全为空**，
+  客户端收到一个语法完整、内容为空、无法分辨原因的回复。所以低于 512 的预算会被抬高
+  （预算仍是上限不是配额，要 64 token 照样得到简短回复，只是**至少能得到**）
+
+### 七、请求链路
 
 - **固定端口**：国内 8120 / 国际 8121 —— 重载不会换端口，宿主不再「Connection error」
 - **只绑回环**、强制 loopback `Host` / `Origin`、常量时间比较令牌、请求体上限 64MB
+- **写操作要求 JSON body** —— 这道校验才是真正的防线：跨站的 JSON POST 会被浏览器预检拦下
+  （本服务不批准预检），而跨站的**表单** POST 虽然发得出去、也带环回 `Host`，
+  却**无法声明 `application/json`**。仅靠 `Origin` 挡不住表单，因为 `file://` 加载的卡片
+  和沙箱 iframe 发送的都是 `Origin: null`
 - **上下文超限自动压缩重试**，压缩目标取「按窗口」与「按原文一半」的较小值
 - **错误归因**：池为空时如实报原因（限流 429 / 额度耗尽 402 / 全部停用 403 / 需重登 401），不再一律 401
+- **冷却跨重载存活**：冷却窗口落盘（`.workbuddy-xdpool/cooldowns.json`），
+  插件重载不再清空限流惩罚；显式「清除冷却」会同步清掉账本
 
 ---
 
@@ -156,8 +194,15 @@ cd ~/.dsh/profiles/desktop/node_modules/dsh-rotakit && npm i qrcode
 | **签到语义** | 「已签到」与「本次领到」分开；已签到标记不虚报积分 |
 | **计数口径** | `available` 与实际可选账号一致，不虚高 |
 | **界面** | 中英文案 1:1、CSS 类完整、运行时探针、渲染输出 |
+| **协议翻译** | 三条路由的事件序列、工具调用往返、非流式与流式分支、`stop_reason` 映射 |
+| **写接口鉴权** | JSON 才放行；表单 / 无 content-type / 外域 Origin / 伪造 Host 全部拒绝 |
+| **冷却持久化** | 跨重载存活、模型级窗口、过期不复活、reset 同步清账本、多实例合并 |
+| **推理预算地板** | 小预算被抬高但**不越过模型上限**（上限是硬界，地板是软界） |
 
-**测试共 31 套，全部通过。**
+**测试共 16 套、303 条断言，全部通过。**
+
+其中协议与安全相关的几套是**实际跑真实 HTTP** 的：起真实的 shim、发真实的请求、
+打到真实的 WorkBuddy 上游，而不是对着 fixture 断言。
 
 ---
 
@@ -166,6 +211,11 @@ cd ~/.dsh/profiles/desktop/node_modules/dsh-rotakit && npm i qrcode
 - 插件只**读取**本机桌面端已经存在的登录态，**不发起**任何登录流程。卡片内扫码是**可选操作**，只在明确点击后打开，走的是桌面客户端自己的接口，**没有绕过任何鉴权**，消耗的是你自己的账号与积分。
 - 令牌只在**本机内存与回环 shim** 之间传递，卡片上显示的账号一律脱敏。
 - shim 只绑 `127.0.0.1`，强制回环来源校验。
+- **管理接口的写操作要求 JSON 请求体**：跨站页面发不出 JSON POST（预检不被批准），
+  而它发得出的表单 POST 无法声明 `application/json` —— 所以本机的账号启停、冷却清除、
+  插件自更新等操作不会被网页越权调用。
+- **二维码内容经过净化**：上游返回的登录二维码先按 SVG 解析并剥掉 `script` / `on*` /
+  `href` 等可执行部分才注入 DOM，不直接信任上游返回的标记。
 
 ---
 
