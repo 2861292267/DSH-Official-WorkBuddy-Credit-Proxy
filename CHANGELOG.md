@@ -4,6 +4,65 @@
 
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 2.0.1 (2026-10-08)
+
+这一版修的是一条**压缩触发链**上的三个叠加问题 —— 用户在 1.1M token 的会话上
+连吃了三种报错：先 11115（超长）、压缩后变 11148（工具对断裂）、最后宿主会话
+文件本身损坏（seq gap 复发）。
+
+### 一、压缩会拆散工具调用对（根因）
+
+`compactMessages` 与 `hardTruncate` 按**条数/下标**丢消息，完全不知道
+OpenAI 格式里「assistant 带 `tool_calls`」与「后续 `role:"tool"` 带
+`tool_call_id`」是一对。丢到对中间时，发出去的历史就是断的：
+
+```
+有结果没调用（孤儿结果）      → 上游 11148 拒收
+有调用没结果（未应答的块）     → 上游 11148 拒收
+结果早于调用（位置颠倒）       → 上游 11148 拒收
+```
+
+而 protocol-compat.js 的翻译层**有**配对保护 —— 但 DSH 走的主 chat 路径
+在 index.js 里 `tool_call_id` 出现 0 次。保护只建了一半。
+
+**修法**：新增 `repairToolPairs(messages)`，四层全部接上：
+
+- **入口**：`prepareChatBody` 规范化后立即修复 —— 覆盖所有客户端
+  （DSH / Codex / Claude Code），无论断对来自宿主损坏还是压缩副作用；
+  三条协议路由共用这个函数，一处修全覆盖
+- **压缩出口**：`compactMessages` 返回前修复
+- **截断出口**：`hardTruncate` 返回前修复
+- **分类**：11148 进 `REQUEST_FAULT_CODES` —— 轮换循环立刻停（不再拿
+  8 个账号撞同一堵墙后透传），直接 400 返回真实原因
+
+配对规则：孤儿结果丢弃；调用未被**全部**应答的 assistant 块整块丢弃
+（其幸存的结果在下一轮成为孤儿一并丢弃）；结果早于调用视为孤儿。
+
+### 二、11148 之前完全不被识别
+
+错误码表里没有 11148，`classifyUpstreamError` 落到默认的 `client` 分类，
+`kindStatus` 给 400 透传 —— 用户看到的正是原文：
+
+```
+workbuddy upstream client (http 400) after 1 account(s): {"code":11148,
+"msg":"tool calls and tool results do not match, please start a new
+conversation and retry"}
+```
+
+### 三、宿主会话文件损坏（seq gap 复发）
+
+`session.v4.jsonl.zstd` 报 `released v2 row 11834 has seq gap`。**这不是
+插件的文件**，是 DSH 宿主的会话日志；宿主代码里有 `recoverable` 解码模式
+但 resume 走 strict。同一会话此前已坏过一次（目录里留着 `.broken-seqgap`
+与 `.bak-ctxfix` 备份）。插件侧能做的（入口配对修复）已做；宿主侧建议
+向 DSH 官方反馈 seq gap 的产生条件。
+
+### 四、测试
+
+新增 `_verify_11148`：15 条断言。**集成测试当场抓到一个真回归** ——
+第一版补丁把 `prepareChatBody` 里 `developer → system` 的重命名顺手删掉了，
+单元测试全绿、集成测试红了。这正是集成层存在的意义。
+
 ## 2.0.0 (2026-10-07)
 
 这一版做的是**协议能力**与**三轮审查修复**。主版本号提升是因为对外能力变了：

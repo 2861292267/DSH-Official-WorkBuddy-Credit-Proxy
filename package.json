@@ -2,7 +2,7 @@
   "name": "dsh-rotakit",
   "displayName": "DSH RotaKit",
   "description": "Merge every locally signed-in WorkBuddy account into DeepSeek Harness as one auto-failing-over model pool, serving OpenAI Chat, OpenAI Responses and Anthropic Messages from the same pool (multi-account rotation, live credits, daily check-in and model catalog).",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "license": "MIT",
   "author": "XDTrees (upstream); adapted by 2861292267",
   "homepage": "https://github.com/2861292267/DSH-Official-WorkBuddy-Credit-Proxy#readme",
