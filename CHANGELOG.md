@@ -4,6 +4,56 @@
 
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 2.1.0 (2026-10-08)
+
+这一版补两个同类项目都有、我们缺的功能：**模型别名映射**与**用量统计维度聚合**，
+外加一处性能修复（压缩循环 O(n²) → O(n)）。
+
+### 一、模型别名映射（modelAliases）
+
+**痛点**：客户端发来的模型名（`gpt-4.1`、`claude`）不在池子目录里时，直接 400
+`model_blocked` —— 同类项目（workbuddy-openai-proxy、KiroStudio）都有别名映射，
+我们没有。
+
+**做法**：`selection.modelAliases` 加配置，格式与同类一致：
+
+```json
+"modelAliases": { "gpt-4.1": "deepseek-v4.1-flash", "claude": "global/claude-sonnet-4.6" }
+```
+
+**目录优先于别名**：名字在目录里就直接用，别名只在目录查不到时才查 ——
+上游万一哪天出了个叫 `claude` 的真模型，不会被映射抢走。
+`region/` 前缀支持跨区域映射；没配的、配错的，原样走（清晰报错，不静默路由错）。
+在 `runChatLoop` 里 `pool.acquire` 之前解析，三条协议路由共享。
+
+### 二、用量统计维度聚合（usageStats）
+
+**现状**：`requests.jsonl` 每次请求都落盘，但**没有任何聚合视图** ——
+要回答"哪个模型花了最多 token、哪个账号最累、三条协议各占多少"只能翻原始日志。
+
+**做法**：新增 `usage-stats.json`，从同一个 JSONL 派生：
+
+| 维度 | 聚合内容 |
+|---|---|
+| `byModel` | count / ok / failed / promptTokens / completionTokens / totalMs |
+| `byAccount` | count / ok / failed / promptTokens / completionTokens / accountLabel |
+| `byChannel` | count / ok / failed（`responses` / `chat` / `(direct)`） |
+
+**增量重建**：游标（`processedLines`）存在 stats 文件里，重启后从断点继续，
+不每次全量读日志 —— 与 cooldown 账本同一套纪律。
+**纯加法**：`/status` 响应多一个 `usageStats` 字段，旧卡片忽略它。
+
+### 三、压缩循环 O(n²) → O(n)（perf）
+
+`compactMessages` 循环里每丢 1 条消息就把全部消息重估一遍。
+实测 3000 条消息压一半：**79,662ms ≈ 80 秒**。
+改成预计算每条 token、循环只做减法：**268ms，297× 加速**，结果逐位一致。
+
+### 四、测试
+
+新增 `_verify_new_features`：27 条断言（别名 9 条 + 聚合器 16 条 + 集成 2 条）。
+全量回归 332/332 全绿。
+
 ## 2.0.1 (2026-10-08)
 
 这一版修的是一条**压缩触发链**上的三个叠加问题 —— 用户在 1.1M token 的会话上
