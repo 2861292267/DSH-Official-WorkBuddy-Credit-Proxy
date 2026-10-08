@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output that is not part of the plugin
+*.tsbuildinfo
+dist/
+coverage/
+
+# Local runtime state the plugin writes next to itself ---------------------
+#
+# The plugin reads desktop sign-in snapshots and stores pool state on disk.
+# None of it belongs in a repository: the account files hold credentials, and
+# the ledgers are per-machine.
+accounts/
+secrets/
+.workbuddy-xdpool/
+pool-status.json
+pool-settings.json
+disabled-accounts.json
+paused-accounts.json
+sticky-sessions.json
+guard-status.json
+prompt.json
+automation.json
+models.json
+launcher.log
+.needs-reinstall
+
+# Working copies made while editing
+*.bak
+*.bak-*
+*.orig
+*.orig-*
+*.tmp
+*.rej
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
