@@ -1,0 +1,74 @@
+{
+  "generatedBy": "tools/run-suite.mjs (rebuild the list by re-running the triage)",
+  "note": "Membership is measured: each suite was executed and confirmed to print a pass/fail count. Shells that print nothing were left out.",
+  "suites": [
+    {
+      "file": "_verify_protocompat.mjs",
+      "covers": "the three protocol routes: shapes, event order, tool round-trips, stop_reason"
+    },
+    {
+      "file": "_verify_shim_e2e.mjs",
+      "covers": "the shim end to end over real HTTP: auth, routes, streaming, error mapping"
+    },
+    {
+      "file": "_verify_minor.mjs",
+      "covers": "small host-side fixes: page short-circuit, poll backoff, theme state, capacity formatting"
+    },
+    {
+      "file": "_verify_review.mjs",
+      "covers": "the first review round's findings, one assertion per finding"
+    },
+    {
+      "file": "_verify_medium.mjs",
+      "covers": "the second review round: cooldown tiers, ledger writes, error boundary"
+    },
+    {
+      "file": "_verify_after_restart2.mjs",
+      "covers": "behaviour that only holds after a host restart"
+    },
+    {
+      "file": "_verify_origin.mjs",
+      "covers": "loopback origin and host rules on the live console routes"
+    },
+    {
+      "file": "_verify_origin_disk.mjs",
+      "covers": "the same rules against the on-disk file, without a running host"
+    },
+    {
+      "file": "_verify_11148.mjs",
+      "covers": "tool-pair integrity through compaction, plus the 11148 classification"
+    },
+    {
+      "file": "_verify_cooldown.mjs",
+      "covers": "the cooldown ledger: persistence, model scope, expiry, reset"
+    },
+    {
+      "file": "_verify_floor.mjs",
+      "covers": "the reasoning-budget floor and its interaction with the model ceiling"
+    },
+    {
+      "file": "_verify_budget_guard.mjs",
+      "covers": "the empty-reply guard that motivated the floor"
+    },
+    {
+      "file": "_verify_5xx.mjs",
+      "covers": "5xx accounting: coalesced writes, TTL refresh, separation from rate limits"
+    },
+    {
+      "file": "_verify_final_health.mjs",
+      "covers": "the live pool after a restart: accounts, models, routes, ledger"
+    },
+    {
+      "file": "_verify_guard_e2e.mjs",
+      "covers": "the write guard: which requests are accepted and which are refused"
+    },
+    {
+      "file": "_xcheck.mjs",
+      "covers": "cross-check between the built file and its source expectations"
+    },
+    {
+      "file": "_xcheck2.mjs",
+      "covers": "second cross-check pass"
+    }
+  ]
+}
