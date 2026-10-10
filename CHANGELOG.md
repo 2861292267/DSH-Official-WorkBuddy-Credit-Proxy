@@ -4,6 +4,283 @@
 
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 2.3.6 (2026-10-10)
+
+### 请求记录在流结束前就被写盘，取消结果被静默丢弃
+
+**症状**：客户端断开后，请求确实被取消了（上游停止计费、秒级终结），
+但日志里 `outcome` 仍是 `ok`，只有 `detail` 写着「已被取消」——自相矛盾。
+
+**根因**：`requests.add(record)` 的位置太早。
+
+```js
+// logTiming（旧）
+record.generateMs = ...;
+requests.add(record);        // ← 环形缓冲 + 追加 requests.jsonl，按值快照
+```
+
+而 `logTiming` 在**成功路径**上是由 `onStreamEnd` 调用的，那个回调在
+**流还在写的时候**就触发。于是快照发生在 `record.outcome` 仍是 `"ok"` 的时刻；
+`report()` 稍后设置的 `client-cancelled` 与 `detail` 再也到不了日志。
+
+`detail` 之所以看起来「写进去了」，是因为它**不在**那次快照已提交的字段集里，
+而 `outcome` 在 —— 一个字段丢了、另一个字段留了，日志因此自相矛盾。
+
+**修复**：把持久化从 `logTiming` 中移出，改为幂等的 `persistRequest()`，
+在所有**真正的终态**调用：
+
+- 流的 `report()`（`end` / `error` / 看门狗三条路径汇聚于此）
+- 12 个失败分支（no-account、model-blocked、no-credits、request-fault、
+  context-overflow …）
+
+`persistRequest` 定义在 `runChatLoop` 作用域，而 `report` 在
+`serveSuccessfulStream` 内 —— 跨函数不可见。第一次改完直接
+`ReferenceError: persistRequest is not defined`（由 `_verify_shim_e2e.mjs` 抓到），
+现改为经参数传入并做可选调用。
+
+**验证**（端到端实测，运行实例）：
+
+| 项目 | 结果 |
+|---|---|
+| 真实长流 95KB / 289 帧 / 3 秒后断开 | `outcome = client-cancelled` ✔ |
+| `totalMs` | 3006ms，精确对应断开时刻 3008ms ✔ |
+| 失败路径（model-blocked） | 记录 1 条，无重复 ✔ |
+| 成功路径 | 恰好 1 条 ✔ |
+
+### 教训
+
+**「写日志」和「改对象」的顺序是一个真实的 bug 来源。**
+凡是先 `add()` 快照、后赋值的代码，后面的字段一定丢。这类问题在静态断言和
+单元测试里都看不出来 —— 只有把**运行实例的日志**读出来对比才对得上。
+
+## 2.3.5 (2026-10-10)
+
+### 这一版真正的重点：之前的所有修复，DSH 都没加载过
+
+**症状**：修复做完、测试全绿、端到端却仍然复现原问题。
+
+**根因**：profile 的 `file:` 依赖指向了一个 **10月5日的孤儿副本**，
+不是开发仓。
+
+```
+C:\Users\ASUS\.dsh\profiles\desktop\package.json
+  "dsh-rotakit": "file:D:/WorkBuddy文件/2026-09-25-10-38-26/repo-DSH-..."
+```
+
+**它是什么**：
+
+| 事实 | 内容 |
+|---|---|
+| 该副本 HEAD | `da61191`（*make the version strip look like a control*） |
+| 开发仓中的对应提交 | `95d9f31` —— **同一提交**（内容逐字相同、作者相同、仅差 11 秒、git 身份不同） |
+| 之后的分叉 | 开发仓又前进 **17 个提交**（2.2.0 → 2.3.5） |
+| 该副本版本 | **1.99.2**；`lib/` 只有 3 个 js（无 `protocol-compat.js`） |
+| `merge-base` | 与开发仓**无共同祖先** —— 是一份被复制出来的孤儿 |
+
+**为什么难发现**：两条线**指向同一个 GitHub 远端**，提交信息一一对应，
+只是 hash 因 rebase/身份差异而不同。光看 `git log` 会以为是一致的。
+
+**怎么暴露的**：只有端到端实测能发现。用真实长流（先确认输出帧数/字节数/
+持续时间）测断开，请求 **30 秒仍无终结记录**、`client-cancelled` 记录数为 **0**
+—— 而单元测试和 332 条断言全绿。**测试跑在开发仓上，运行的是另一份代码。**
+
+**修复**（三步）：
+
+1. profile 依赖改指向开发仓；
+2. `pnpm install`，输出确认了变更；
+3. 安装目录改为 **Junction** 指向开发仓 —— 今后改仓库**立即生效**，
+   从根上杜绝再次失配（pnpm 对 `file:` 默认是复制，这正是问题能悄悄存在的原因）。
+
+> 顺带验证：中文+空格路径下的 `file:` 依赖可用，npm 会创建 Junction。
+
+**教训**：`file:` 依赖是**复制语义**。改了「看起来是同一个仓库」的目录，
+运行中的插件可能读的是另一份。改完必须验证**运行实例**的行为，
+而不是验证磁盘上的文件、也不是验证测试套件。
+
+### 端到端实测（重启后，真实实例）
+
+| 项目 | 结果 |
+|---|---|
+| PROTO-03 `POST /v1/responses` | 返回 `{object:"response", status:"failed", ...}` ✔ |
+| CONC-008 真实长流 3 秒 / 71KB 后断开 | **断开后 1.0 秒落盘**，`totalMs` 精确等于断开时刻 ✔ |
+| `/v1/chat/completions` + `/v1/messages` | 均无 5xx ✔ |
+
+CONC-008 前后对照（同为真实长流）：修复前断开后 23s→121s 无记录、上游继续计费；
+修复后 **1.0s** 终结。
+
+### 附：客户端取消的记录标签
+
+新增 `outcome: "client-cancelled"` 与 `detail` 说明，使日志能区分
+「用户主动中断」与「上游故障」。此前取消会被记成 `ok`，掩盖了中断事实。
+写入位置必须在 `onStreamEnd`（即 `logTiming("ok")`）**之后** ——
+否则会被覆盖回 `ok`。
+
+## 2.3.2 (2026-10-10)
+
+这一版把第二轮独立审计（4 路并行审查 + 交叉复核，共 49 条结论）里
+**经复核确认**的缺陷落到了代码上。每条都写清根因、为什么这么修、
+以及怎么验证 —— 包括我自己在修复过程中造成的两次回归。
+
+修复前基线：17 套件 332 断言全绿。修复后：332 + 42（新增专项）= 374 全绿。
+
+### 一、客户端断开后，上游继续跑（**唯一直接花钱的一条**）
+
+**症状**：关掉页面或中断一个长回答，上游仍在生成，token 继续计费。
+
+**根因**：`req.on("close")` 触发的 `controller.abort()` **只作用于 fetch 的
+headers 阶段**。`chatStream` 拿到响应头就返回了原始 `response`，而响应体交给
+`Readable.fromWeb` 时**没有绑定任何取消信号** —— 没有 `AbortSignal.any`，
+也没有 `body.cancel`。
+
+**实测**（本机 8120 端口，真实上游）：客户端在 t+1206ms 收到首字节后断开，
+**23 秒后 `requests.jsonl` 仍无该请求的终结记录**。它要挂到 `IDLE_TIMEOUT_MS`
+（300 秒）才会被收走，而且会被记成 `ok` —— 因为从上游视角什么都没出错。
+
+**修法**：把 `controller.signal` 组合到响应体上，断开时 `body.destroy()`
+向下撕掉 web stream，从而取消在途 HTTP 请求。`serveSuccessfulStream` 新增
+`signal` 参数，两个调用点（主循环与压缩恢复）都传入。
+
+**验证**：断言 `abortUpstream` 存在、绑定了 signal、在 `close` 时移除监听
+（避免闭包滞留）、两个调用点都传了 signal。
+
+### 二、Codex 的自由格式工具载荷被静默丢弃
+
+**症状**：Codex CLI 的 `apply_patch` 永远收到空补丁，模型回
+"I received an empty patch request"；`local_shell_call` 同理。HTTP 仍是 200，
+日志里看不出任何异常。
+
+**根因**：载荷字段**随 item 类型而变**，而代码只读了其中两个：
+
+| item 类型 | 载荷字段 |
+|---|---|
+| `function_call` | `arguments`（JSON 字符串） |
+| `local_shell_call` | `action`（对象） |
+| **`custom_tool_call`** | **`input`（自由格式字符串，不是 JSON）** |
+
+`apply_patch` 这类工具声明为 free-form，模型的输出落在 `input` 里，
+而代码只查 `arguments`/`action`，于是 `args` 恒为 `"{}"`。
+（已对照 codex-rs `protocol/src/items.rs` 核实自由格式变体携带 `input`。）
+
+**修法**：按 `arguments` → `action` → `input` 的顺序取值。`input` 已是字符串时
+**原样透传**而非再 `JSON.stringify` —— 自由格式载荷就是工具要收到的原始文本，
+套一层引号等于把补丁变成一个 JSON 字符串字面量。
+
+**验证**：把真实补丁文本喂进 Responses 翻译器，断言取到的是原文，
+且**不是**被引号包起来的字符串。这里我第一版断言写错了（用 `JSON.stringify`
+后的字符串去查转义符，必然失败），改成解析后取 `tool_calls[0].function.arguments`
+再判断。
+
+### 三、Responses 路由的错误不是 Responses 协议形状
+
+**症状**：Codex 拿到 400 无法归类。上下文超长时不会被识别为可重试，
+压缩恢复路径因此从不触发，回合直接死掉。
+
+**根因**：`responsesProtocol` 复用了 OpenAI 的 `writeOpenAIError`，
+返回 `{"error":{...}}`。而 Codex 的解析器（codex-rs `sse/responses.rs`）
+只认 `response.failed` 事件、或一个 `status: "failed"` 的 `response` 对象。
+
+**实测**（运行中实例）：`POST /v1/responses` 返回的确实是
+`{"error":{"message":...}}` —— 复现了。
+
+**修法**：新增 `writeResponsesError`，输出
+`{ id, object: "response", created_at, status: "failed", error: { code, message } }`。
+HTTP 状态码照旧，普通 HTTP 客户端仍能看到真实 code。
+**Chat 路由继续用 OpenAI 信封**（有断言守着，防止误改）。
+
+### 四、usage-stats 的行号游标与日志裁剪冲突，统计永久漏计
+
+**症状**：界面上的用量统计在某天之后**再也不增长**，无任何报错。
+
+**根因**：`createRequestLog.trim()` 在 `requests.jsonl` 超过 4MB 时把它重写为
+最后 200 行，而 `processedLines` 记的仍是裁剪前的行数（比如 3000）。
+下次构建时 `lines.length (200) <= processedLines (3000)` 成立 → 直接 return，
+**而且这个条件只会越来越成立**，不自愈。
+
+**修法**：游标改成「**哪一行**被数过了」，而不是「数了多少行」：
+
+- `cursorLine` —— 最后被计数那行的文本
+- `cursorSeenCount` —— 该文本在此之前从文件头数起**已出现过多少次**
+
+相同行在这里是**常态而非边缘情况**（同模型同 token 数的两条请求序列化后完全相同），
+所以只按文本匹配必然有歧义。出现序号消除歧义：行是追加的，裁剪保留尾部，
+只要序号不超过保留下来的出现次数，第 n 次出现就还是同一行。
+
+锚点整行消失时（被裁掉或轮转）从存活部分的头部重新开始 —— 宁可多计也不漏计。
+
+**验证**（行为级，非仅静态）：把真实函数从源码中提取出来单独执行，喂进
+「3 行 → 裁剪为 2 行 → 增长回 3 行」序列。**这里抓到了我第一版的真 bug**：
+我最初用「末尾偏移量」做锚点，`fromEnd=0` 在新文件里永远匹配最后一行，
+导致游标原地不动（计数冻结在 3）。改用出现序号后通过。
+
+### 五、流式请求的 inFlight 租约提前释放，IN_FLIGHT_LIMIT 形同虚设
+
+**症状**：同账号可被并发叠加任意多路流式请求，硬上限不生效。
+
+**根因**：`serveSuccessfulStream` 是 async，但函数体里 `await` 数为 0 —
+它挂上监听器、调用 `pipe` 就 `return` 了（源码注释自己写着
+"returns as soon as pipe is called"）。外层 `finally` 随即 `pool.release()`，
+于是**每条被服务的请求在整个流传输期间 `inFlightCount` 恒为 0**。
+账号读起来是空闲的，就可以在已有流之上再被选中，`stickyAccount`
+还会把整个会话压到同一个账号上。
+
+**修法**：租约的**所有权转移给流**：
+
+- 主循环用幂等的 `lease` 令牌，`finally` 调 `lease.finish()`
+- `serveSuccessfulStream` 开头 `lease.handOff()` 接管
+- 流的终态回调 `report()` 里 `lease.finish()` 才真正归还
+  —— `report` 由 `end`/`error`/看门狗三条路径共同触发，一处覆盖所有终态
+- **补偿路径**：`Readable.fromWeb` 或协议写头抛异常时流根本没启动，
+  用 `releaseOnFailure()` 兜底归还
+
+`finish` **必须幂等**：漏放会让账号永久退出轮换，但重复放更糟 ——
+会为一条已不再持有租约的请求再减一次，把另一个仍在途的请求的计数打到 0，
+正是这套机制要防的超额准入。
+
+压缩恢复路径（`recoverFromContextOverrun`）有同样问题：它 `return` 一个
+**仍在使用中**的账号，却在自己的 `finally` 里释放了租约。改为把 `releaseLease`
+随结果一并返回，由调用方交给流。
+
+**验证**：11 条断言覆盖四个必要部分 —— 令牌存在、有 hand-off、
+`finally` 用的是令牌而非 `pool.release`、幂等、终态归还、异常路径归还、
+两个调用点都传租约、恢复路径返回自己的租约。
+
+### 六、11 个编辑器备份随发布包发布，占包体 74%
+
+**根因**：`package.json` 的 `files` 白名单里 `"lib"` 是**目录**项，
+而**目录项会盖过 `.gitignore`**。13 个 `.bak-*`（约 4.1MB）虽然 git 从未跟踪、
+`.gitignore` 也明明挡了，却照样进 tgz。
+
+**修法**：备份移出 `lib/`（放到工作区外的归档目录），并新增 `.npmignore`
+做第二道防线 —— 排除规则写在 npm 真正会读的地方。
+
+**验证**：`npm pack --dry-run` 实测。
+**包体 5712KB → 1354KB（降 76.3%）**，16 个文件，无 `.bak`/`.orig`。
+
+### 本次修复过程中我自己造成的两次回归（留档）
+
+**其一**：我先把修改做在**安装目录**，然后用 `cp <repo>/lib/*.js <inst>/lib/`
+"同步"——结果把安装目录**打回了仓库的旧版本**，五条修复全部丢失。
+根因是**仓库与安装目录本来就不一致**：仓库的 `protocol-compat.js` 是 32327 字节，
+安装目录是 33288 字节（多一个 PROTO-01/11148 修复）。
+教训：同步前先比对两侧，而不是假设一侧领先。现已改为**在仓库改、带备份地同步**。
+
+**其二**：RT-02 第一版用「末尾偏移量」当锚点，`fromEnd = 0` 无意义
+（"最后一行"在新文件里永远是最后一行），计数冻结。
+是**行为级验证**抓出来的 —— 仅做静态断言不会发现。这条教训写进验证脚本注释。
+
+### 验证方式汇总
+
+| 项目 | 命令 | 结果 |
+|---|---|---|
+| 全量回归 | `node tools/run-suite.mjs` | 332 断言 / 17 套件，全绿 |
+| 本轮专项 | `node _verify_captain_fixes.mjs` | 42 断言，全绿 |
+| 发布前检查 | `node tools/check-publish.mjs` | 6 项，全绿 |
+| 打包体积 | `npm pack --dry-run` | 1354KB，无备份文件 |
+| 端到端 | 真实 8120 端口 | 复现了 CONC-008 与 PROTO-03 |
+
+**注意**：以上是**磁盘**验证。运行中的 DSH 用的是内存旧代码，
+必须重启才会加载 2.3.2 —— 端到端实测已确认旧行为仍在生效。
+
 ## 2.3.0 (2026-10-10)
 
 这一版把**更新流程本身**做完整。对照了业界做法（Tauri 的更新器、

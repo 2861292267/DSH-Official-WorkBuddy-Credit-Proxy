@@ -1,0 +1,47 @@
+# Keep the published package free of local working copies.
+#
+# Why this file exists at all: `package.json` lists `"lib"` in `files`, and a
+# DIRECTORY entry in `files` wins over `.gitignore`. Thirteen editor backups
+# (`.bak-*`, ~4.1 MB) therefore rode along into the tarball - 74% of the
+# published unpacked size - even though `.gitignore` already excluded them and
+# git never tracked them. The `.gitignore` rule was doing the opposite of what
+# it looked like it was doing.
+#
+# So the exclusion is declared where npm actually reads it. This is a second
+# line of defence, not the only one: the backups are also no longer kept inside
+# `lib/` at all (they live in the workspace, outside the package root).
+#
+# Patterns mirror `.gitignore`; a comment on each says why it is here.
+
+# Working copies made while editing
+*.bak
+*.bak-*
+*.orig
+*.orig-*
+*.rej
+
+# Temp files from the write-temp-then-rename pattern used by the ledgers
+*.tmp
+
+# Local runtime state the plugin writes next to itself (never published)
+.workbuddy-xdpool/
+pool-status.json
+pool-settings.json
+disabled-accounts.json
+paused-accounts.json
+sticky-sessions.json
+guard-status.json
+prompt.json
+automation.json
+models.json
+launcher.log
+.needs-reinstall
+accounts/
+secrets/
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
