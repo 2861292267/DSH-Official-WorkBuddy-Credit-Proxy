@@ -55,6 +55,9 @@
     "CHANGELOG.md",
     "LICENSE"
   ],
+  "optionalDependencies": {
+    "qrcode": "^1.5.4"
+  },
   "scripts": {
     "build": "tsdown",
     "prepublishOnly": "tsdown",
