@@ -139,25 +139,48 @@
 ```
 .
 ├── lib/
-│   ├── index.js        宿主端：账号池、shim、模型目录、调度器（构建产物）
-│   ├── client.js       浏览器端卡片（构建产物）
-│   ├── bin.js          CLI（构建产物）
-│   └── index.d.ts      类型（构建产物）
-├── patches/            针对上游 1.6.1 原版的改动脚本（幂等，可重放）
-├── tools/              账号导入、重启验证等辅助脚本
+│   ├── index.js        宿主端：账号池、shim、模型目录、调度器（源码，直接编辑）
+│   ├── client.js       浏览器端卡片（源码，直接编辑）
+│   ├── protocol-compat.js  Anthropic / OpenAI Responses 协议互译
+│   ├── bin.js          CLI：doctor 等诊断命令
+│   └── index.d.ts      类型
+├── .github/workflows/  打 tag 即发布到 npm（OIDC，无需 token）
+├── tools/              发布前检查与回归套件
+│   ├── run-suite.mjs           全量回归（332 断言）
+│   ├── check-publish.mjs       本机发布前检查（需已安装副本）
+│   └── check-package-files.mjs CI 可跑的打包完整性检查
 ├── cordis.patch.yml    插件注册补丁
 ├── package.json        清单（dsh.bundle / dsh.client 都在这里）
 ├── screenshots.json    卡片截图清单
 ├── assets/             截图
 ├── README.md           本文件
 ├── README.en.md        英文版
-├── UPSTREAM-README.md  上游原版文档
-└── CHANGELOG.md        上游变更记录
+├── UPSTREAM-README.md  上游原版文档（致谢与出处）
+├── AGENTS.md           开发约定（**改代码前先读**）
+└── CHANGELOG.md        变更记录
 ```
 
-**四个 `lib/` 产物随仓库提交**，安装时不需要任何构建步骤。
+**`lib/` 下的文件是源码，不是构建产物** —— 本仓库没有 `src/`、没有构建步骤，直接改 `lib/` 即可。
 
-`patches/` 与 `tools/` 是**开发期脚本**，安装和运行都用不到：`patches/` 记录当初是怎么从上游 1.6.1 一步步改到现在的（幂等，每个脚本先把原文件备份成 `*.orig-<标记>`），`tools/` 是账号导入与重启验证的小工具。**日常使用只看 `lib/`。**
+`tools/` 是开发期脚本，安装和运行都用不到。**日常使用只看 `lib/`。**
+
+---
+
+## 与上游的关系
+
+本仓库是 [`XDTrees/dsh-workbuddy-xdpool`](https://github.com/XDTrees/dsh-workbuddy-xdpool) 的**二次开发**，
+按 MIT 许可保留原作者版权。上游是 TypeScript 项目（`src/` → 构建出 `lib/`），本仓库不是。
+
+**两条版本线互相独立**，不对齐、不互认：
+
+| | 上游 | 本仓库 |
+|---|---|---|
+| 包名 | `dsh-workbuddy-xdpool` | **`dsh-rotakit`** |
+| 版本 | 1.8.4 | 2.3.23 |
+| 形态 | TS 源码 + 构建 | `lib/` 即源码 |
+
+> **不要往 `dsh-workbuddy-xdpool` 发布。** 那个包名属于上游作者，不是我们的。
+> 参见 `AGENTS.md` §零。
 
 ---
 
@@ -183,6 +206,50 @@ cd ~/.dsh/profiles/desktop/node_modules/dsh-rotakit && npm i qrcode
 
 ---
 
+## 自动更新
+
+卡片的「设置」页有**检查更新**与**更新**按钮。整条链路是：
+
+```
+检查更新   拉取本仓库 main 分支的 tarball → 读 package.json 的版本号
+           （12 秒超时；只读开头一小段，不下载整个包）
+更新       下载整个 tarball → 校验 → 逐个文件替换
+回滚       把某次更新前的备份原样放回
+```
+
+### 几条设计上的取舍
+
+**只更新运行时真正加载的文件。** `TRACKED_FILES` 列了六个：三个 `.js` 模块、
+`bin.js`（`doctor` 命令的全部逻辑）、`cordis.patch.yml`（DSH 据此注册 provider）、
+以及 `package.json`。`index.d.ts` 是纯类型、运行时不加载，因此**刻意不在列表里** ——
+带上它只会让每次更新多传 94 KB 而不改变任何行为。
+
+**先备份全部，再写入任何一个。** 早先的版本是"备份一个、立刻覆盖一个"，
+于是更新失败时留下的备份集是**残缺的**；而回滚点又只接受完整的备份集，
+结果**最需要回滚的那次更新恰恰没有回滚点**。现在两个阶段分开：
+六个文件全部备份完，才开始写第一个。
+
+**写入失败会停下并说清楚是哪个文件**，而不是抛异常。
+临时文件 + 同卷 `rename`，所以任何单个文件要么是旧内容、要么是新内容，不会有半个。
+
+**回滚是可以反悔的。** 覆盖前会先把"当前版本"另存为 `.pre-rollback-<时间戳>`。
+备份集本身只按它**实际覆盖到的文件**恢复 —— 早于某个文件加入的备份集仍然可用，
+恢复它等于"回到那个文件还不存在的版本"。
+
+**备份只保留最近 3 组。** 每次更新会把六个文件复制一份（约 1.1 MB）；
+成功更新之后自动清理更旧的，否则 `lib/` 会一直长下去。
+
+### 关于「环境不匹配」
+
+| 情况 | 行为 |
+|---|---|
+| **没装桌面客户端 / 只用了网页版** | 检测不到账号，卡片给出各区域（国内版 / 国际版）的登录指引。**插件读的是桌面客户端留在本机的凭据，网页版登录不会被读到。** |
+| **非 Windows** | 跳过注册表探测，改走 macOS bundle 与配置文件路径；两者都没有时安静返回空，不抛错 |
+| **GitHub 不可达** | 版本号照常显示（显示本机版本），更新按钮可用，失败信息可读；不会卡在"正在检查更新" |
+| **安装目录只读** | 更新失败并明确告知，不留下半写状态 |
+
+---
+
 ## 验证方式
 
 每个结论都有对应的可复现验证，核心几类：
@@ -198,11 +265,20 @@ cd ~/.dsh/profiles/desktop/node_modules/dsh-rotakit && npm i qrcode
 | **写接口鉴权** | JSON 才放行；表单 / 无 content-type / 外域 Origin / 伪造 Host 全部拒绝 |
 | **冷却持久化** | 跨重载存活、模型级窗口、过期不复活、reset 同步清账本、多实例合并 |
 | **推理预算地板** | 小预算被抬高但**不越过模型上限**（上限是硬界，地板是软界） |
+| **打包完整性** | 每个运行时加载的文件都在 `files` 白名单里（`tools/check-package-files.mjs`） |
 
-**测试共 16 套、303 条断言，全部通过。**
+**回归套件 17 套、332 条断言，全部通过。**
 
 其中协议与安全相关的几套是**实际跑真实 HTTP** 的：起真实的 shim、发真实的请求、
 打到真实的 WorkBuddy 上游，而不是对着 fixture 断言。
+
+改完代码后跑：
+
+```bash
+node tools/run-suite.mjs          # 全量回归
+node tools/check-publish.mjs      # 本机发布前检查（需已安装副本）
+node tools/check-package-files.mjs  # 打包完整性（CI 也跑这个）
+```
 
 ---
 

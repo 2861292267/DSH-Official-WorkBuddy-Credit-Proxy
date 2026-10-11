@@ -1,0 +1,126 @@
+name: Release
+
+# 打 tag 即发布到 npm。
+#
+# 为什么用 workflow 而不是本机 `npm publish`：
+#   本机 npm 未登录（ENEEDAUTH），且账号 2FA 绑的是安全密钥，而 npm CLI 的
+#   `--otp` 只接受认证器 6 位数字码 —— 两者不通用。Trusted Publishing 是
+#   npm 官方给出的替代通道，也是唯一无码可用的。
+#
+# 首次启用需要在 npm 侧绑定（只做一次）：
+#   npmjs.com → 该包 → Settings → Trusted Publisher → GitHub Actions，填：
+#     Organization or user : 2861292267
+#     Repository           : DSH-Official-WorkBuddy-Credit-Proxy
+#     Workflow filename    : release.yml     ← 必须与下面 name 所在文件名完全一致
+#     Environment name     : 留空
+#
+# 本仓与上游的区别（改这个文件前先读）：
+#   上游是 TypeScript 项目（src/ → tsdown 构建出 lib/），本仓不是。
+#   本仓的 lib/ 就是源码，直接编辑，没有构建步骤，也没有 tests/ 目录。
+#   所以这里不跑 tsdown / vitest，改用本仓自己的验证入口。
+#
+# 要点（改这个文件时别破坏）：
+#   - 文件名必须与 npm 侧「Workflow filename」一致：release.yml
+#   - id-token: write 是 OIDC 的唯一硬要求，删掉就退化成需要 token
+#   - registry-url 指向官方 registry（本机或环境的 .npmrc 可能是镜像，必须覆盖）
+#   - contents: write 是建 Release 需要的：GitHub Release 与 tag 是两回事
+#   - package-manager-cache 是 setup-node v7 才有的输入：v4 上不存在，
+#     会报 "Unexpected input(s) 'package-manager-cache'" 并静默失效
+#   - tag 与 package.json 版本不一致时中止：宁可让发布失败，也不要发出一个
+#     名不副实的版本
+
+on:
+  push:
+    tags:
+      - "v*"
+  # 手动触发默认只跑验证，不发版 —— 这样可以用它验证 CI 而不误发 npm。
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "手动触发时也执行发布（默认只跑到验证）"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write # OIDC：npm 据此确认「是本人授权的 workflow」
+  contents: write # 建 GitHub Release 需要写权限（只读会 403）
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Show resolved toolchain
+        # 失败时先看得到环境，避免把别的问题误判成依赖问题
+        run: |
+          node --version
+          npm --version
+
+      - name: Verify the tag matches package.json
+        # 只在 tag 推送时校验。手动触发时 GITHUB_REF_NAME 是分支名（main），
+        # 拿它跟版本号比必然不相等 —— 那会让手动触发永远跑不下去。
+        if: github.event_name == 'push'
+        # 版本号对不上就中止：宁可让发布失败，也不要发出一个名不副实的版本
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package.json=$PKG_VERSION  tag=$TAG_VERSION"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Verify the published name is ours
+        # 这个仓库是二创。`dsh-workbuddy-xdpool` 属于上游作者，我们没有任何
+        # 权利往那个包名发布 —— 那不是一个「更新自己插件」的动作，是冒用他人的
+        # 包名。所以这里挡住：包名若被改回上游名字，直接失败。
+        run: |
+          PKG_NAME="$(node -p "require('./package.json').name")"
+          echo "package name = $PKG_NAME"
+          if [ "$PKG_NAME" != "dsh-rotakit" ]; then
+            echo "::error::refusing to publish under '$PKG_NAME' - this repository publishes 'dsh-rotakit' only"
+            exit 1
+          fi
+
+      - name: Verify the tarball contains the load-time imports
+        # lib/index.js 静态 import 的文件必须全部进包，否则用户装上后
+        # ERR_MODULE_NOT_FOUND，而且要重启才暴露。
+        # 这是在**发布前**拦，比用户的更新后检查更靠前一道。
+        run: node tools/check-package-files.mjs
+
+      - name: Syntax-check the shipped JavaScript
+        # 本仓没有构建步骤，lib/ 就是源码，所以语法检查是必要的
+        run: |
+          for f in lib/*.js bin.js; do
+            [ -f "$f" ] || continue
+            echo "checking $f"
+            node --check "$f"
+          done
+
+      - name: Pack and report what would ship
+        run: |
+          npm pack --dry-run
+          echo "---"
+          npm pack
+          ls -la ./*.tgz
+
+      - name: Publish to npm
+        if: github.event_name == 'push' || inputs.publish
+        # OIDC 自动生效；npm CLI 会先尝试 OIDC，再回退到传统 token。
+        # --ignore-scripts：本仓的 prepublishOnly 引用了上游的构建工具，
+        # 在这里跑不起来也没有意义（lib/ 已经是成品）。
+        run: npm publish --ignore-scripts --access public
