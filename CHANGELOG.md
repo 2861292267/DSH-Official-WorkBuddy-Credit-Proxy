@@ -4,6 +4,211 @@
 
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 2.3.13 (2026-10-11)
+
+这一版是**设置卡片的视觉重构**（色调 / 排版 / 宽屏布局），加上一次
+**余额刷新的缺陷修复**。所有改动都带着实测证据，并在 `_ui/` 下留下了可复跑的护栏脚本。
+
+### 一、色调：建立令牌层，跟随宿主主题
+
+原先卡片直接读宿主的 `--dsw-alias-*`。现在多了一层 `--pool-*`
+（**基础块 17 个 + 既有 5 个 = 22 个**），每个转发到宿主变量并带字面量 fallback：
+
+    --pool-accent: var(--dsw-alias-state-business-primary, #0369a1);
+
+**亮暗取值分置**：亮色 `#0369a1`（深青蓝）/ 暗色 `#38bdf8`。
+定稿的青蓝在白底只有 **2.14:1**，正文远不达标，所以亮色必须加深。
+
+**主题三态**：`body[data-ds-dark-theme]`（宿主算出）/ `body[data-theme="light"]` /
+`body:where(:not(...):not(...))` 兜底。
+
+> **任务书里曾要求「跟随系统那一路在 `@media (prefers-color-scheme: dark)` 里补映射」，
+> 那条判据是错的，已作废。** 该媒体查询在本文件里**从未作为活规则存在过**
+> （逐行跟踪注释区间确认：含它的 2 处全在注释内，剥离注释后活规则 0 条）。
+> 宿主的 `bootThemeBodyScript` 已经把三态折成一个布尔属性：
+>
+>     const dark = preference === 'dark' || (preference === 'system' && matchMedia(...).matches)
+>     document.body.toggleAttribute('data-ds-dark-theme', dark)
+>
+> 卡片若自行读 OS，会在「OS 暗 + 用户选亮色」时拿到暗色强调色配浅色宿主。
+
+### 二、排版与布局：宽屏真正铺开
+
+概览改**三栏**（主区 + 336px 右栏）、账号列表改**五列表格**、趋势图 **44px → 104px**、
+自动化页三卡并排、设置页双栏。
+
+**关键决策：不新增包裹层。** 那 9 条「默认隐藏各区块」的选择器（`.usage > .x`）
+与揭开侧（`.page-x .x`）的**特异性被刻意做成同为 (0,2,0)**，靠**源码顺序**决胜；
+插入包裹层会让隐藏侧链变长、特异性不再相等、**胜负改由特异性决定 → 可能反转
+→ 卡片渲染为空白，即使一条选择器都没漏改。** 把 grid 直接加在既有的 `.usage` 上，
+则**既有规则一行都不用改**。
+
+> 那一段的注释自己记录过同类事故：「CSS 合法、类都在、每个选择器都能解析，
+> **测试套件完全看不见**」。
+
+响应式四档（>900 / 620–900 / <620 / <420）全部走 `@container poolcard`，
+`@media (min-width)` 命中 **0 处** —— 用媒体查询会在 1400px 窗口下把约 600px 宽的卡片误判为宽屏。
+
+### 三、余额刷新：失败被静默吞掉，还会冻结 10 分钟
+
+**症状**：上游抖动一次，该账号的余额在界面上**静止 10 分钟**，且系统里**不留任何痕迹**。
+
+**根因（两处，叠加）**：
+
+    lastBalanceAt.set(account.id, now);   // ← 写在 try 之前
+    try {
+        const credits = await client.fetchCredits(...);
+        ...
+    } catch {}                            // ← 空 catch
+
+时间戳在 `try` **之前**更新，所以**无论成功失败都推进** → 失败也要等满
+`BALANCE_REFRESH_MS`（10 分钟）才重试。一次瞬时抖动被放大成 10 分钟静默。
+而空 catch 让「刚才失败了」这件事无处可查。
+
+**修法**：时间戳移入成功分支；新增**独立**的 `lastBalanceFailAt` +
+`BALANCE_RETRY_MS = 30s` 做失败退避。
+
+> **两个窗口语义必须分离**：`lastBalanceAt` = 「距上次**成功**」，
+> `lastBalanceFailAt` = 「距上次**失败**」。一个时间戳无法同时表示这两件事
+> —— 那正是原缺陷的形状。
+
+### 四、语言包：补上一个此前为零的自动化保护
+
+期间发现仓库 `AGENTS.md` 里有一句**错误陈述**：「`check-publish.mjs` 会检查
+（136 个键逐个核对）」。实测：把中英两包的 `row.title` **都删掉**，
+该脚本仍 `6 passed, 0 failed`、`exit=0` —— **它根本不检查语言包**，
+而 `run-suite` 的 17 套件也不涉及 i18n。**语言包此前零自动化保护。**
+
+新增 `_ui/verify-locales.mjs`：校验中英数量相等、双向差集为空、
+绝对数 = 基线 + N（N 从 `git diff` 数出，**不靠算术外推**）、两包各自无重复键。
+本次新增 28 键/包 → 289/289。
+
+### 五、验收
+
+| 检查 | 结果 |
+|---|---|
+| `node tools/run-suite.mjs` | 332 passed / 0 failed |
+| `node tools/check-publish.mjs` | 6 passed / 0 failed |
+| `_ui/verify-locales.mjs --added 28` | 9 passed / 0 failed |
+| `_ui/theme-matrix.mjs` | 234 项 / 0 失败（18 格三态 + 对比度） |
+| `_ui/check-root-fallback.mjs` | 通过（补 `theme-matrix` 的已证盲区） |
+| `_ui/shots/layout-shots.mjs` | 72/72 渲染有内容（4 主题 × 6 宽 × 3 页） |
+
+### 六、留档：本轮的可信度教训
+
+写检查脚本时踩到的坑，全部来自真实翻车，已写进 `AGENTS.md` §六：
+
+1. **凡枚举型/存在型断言，必配反向验证** —— 单向只能证明「我找到了这些」，
+   不能证明「我没漏掉」。实例：正则漏 `-fg-2`、尾行号漏 7 键、行号切包。
+2. **「全部通过」必须先报「参与比对的项数」，且不得为 0** —— 实例：定位亮色块时
+   命中了**注释里的那一份**，比较集合为空，检查空转报绿。
+3. **报绿前先证明破坏真的改变了可观测输出** —— 实例：破坏确实落盘，但换成了
+   **特异性等价、渲染相同**的写法，全绿是**对的**；若据此判「检出力回归」就是误伤。
+
+**五种「信号不可信」形态**：假绿 / 假红 / 漂移 / 未改变可观测结果 / 未接线。
+
+**退出码分段**（仅新建护栏脚本）：`0` 通过 / `1..99` 检出 / `100+` 基础设施故障。
+`run-suite.mjs` 保持原语义（退出码 = 失败套件数），**不要去改它**。
+
+### 七、未完成（已知未做，非无人发现）
+
+- **30 处 CSS 规则仍直读宿主 `--dsw-alias-state-success-primary`**
+  （另有 10 处 `focus-visible` 轮廓**刻意保留** —— 焦点环应随宿主）。
+  它们当前**不是缺陷**（宿主主题下渲染正确），只是科技色调尚未统一。
+  **收编时注意**：还有 2 处在 JS 侧（`dotColor()` 返回值、React 内联 `style`），
+  **不在 `POOL_CARD_CSS` 模板内 —— CSS-only 扫描会漏掉它们。**
+- **状态点保持绿色**：它承载「健康 / 正在服务」语义
+  （`data-state` 有 error/idle/loading 三个变体），改成品牌色会让
+  **「健康」与「品牌色」再也分不开** —— 那是分辨率下降，不是视觉统一。
+
+## 2.3.9 (2026-10-11)
+
+### 签到 / 自动化完成状态在重启后丢失（`servedSlots` 从未被持久化）
+
+**症状**：每次签到完成之后，重启 DeepSeek Harness 就看不见签到是否完成了。
+重启后卡片上同时出现两件互相矛盾的事：收益栏显示今天签到拿到 100 credit，
+任务栏却显示签到 job「今天没跑过」。
+
+**根因**：`lib/index.js` 的 `persistEarnings()` 只写两个字段：
+
+```js
+this.saveEarningsFn({
+    date: this.earningsDate,
+    accounts                 // ← 只有各账号收益
+});
+```
+
+`servedSlots` / `lastRunSlot` / `lastRunDate` **一个都没写**。
+恢复端 `applyEarningsLedger()` 同样只读 `accounts`。两半事实丢了一整半。
+
+实测确认：`cordis.patch.yml` 的 `automationEarnings` 段只有 `date` 与
+`accounts`，字符串检索确认无 `servedSlots`、无 `lastRunDate`。
+
+**后果（两层，第二层更严重）**：
+
+1. 界面自相矛盾 —— 同一次持久化里的 `accounts[].checkinCredit = 100` 还在，
+   但 `servedSlots` 为空，卡片据此判定「今天没跑过」。
+2. **防重复执行的锁丢了** —— `runNow` 的守卫是
+   `this.servedSlotsOf(kind).includes(stamp)`，集合为空即守卫失效，
+   重启后定时器会把今天已经跑过的 job 再跑一遍，真实重复请求上游。
+
+**修法（一）**：`persistEarnings()` 增加 `runs` 段（按 kind 分组的
+`servedSlots` / `lastRunSlot` / `lastRunDate`），`date`、`accounts`
+含义不变；`applyEarningsLedger()` 同步恢复，并复用 `runJob` 写入端
+同一条「只收当天 slot」的过滤规则。
+
+新增 `readJobRunRecord()` 只接受字符串：`servedSlotsOf()` 对每个条目调用
+`.startsWith`，一个数字混进去就会抛错 —— 而这是插件启动路径，抛错会连整张
+卡片一起带走。畸形输入（`ledger` 为 `null`/数字、`accounts` 为 `null`、
+`runs` 为字符串、`servedSlots` 含非字符串）一律不抛错、不清空已有状态。
+
+**修法（二）：即使补上了字段，锁仍然不会落盘 —— 这是本次的第二个真 bug。**
+
+`runJob()` 末尾原本没有任何持久化调用。更早的每一次 `persistEarnings()`
+都来自 `recordEarnings()`，而它**每账号触发一次**，发生在账号循环中途 ——
+也就是在 `servedSlots` / `lastRunSlot` / `lastRunDate` 被赋值**之前**。
+
+更要命的是：一个所有账号都回「已签到」的 job 一分钱都不进账，
+**根本不会调用 `recordEarnings`**，于是一次写入都不会发生 ——
+尽管它确实占用了那个 slot。只补字段而不补写入时机，锁依然永远不落盘。
+
+因此 `runJob()` 在状态定稿**之后**补一次 `persistEarnings()`。
+这一条不做，第一个修复是不完整的。
+
+**修法（三）**：顺手修掉同类隐患 —— 宿主会恢复**两次**（构造函数一次、
+设置文档可读后 `index.js:11747` 再一次），而收益是逐账号 merge，
+重复 merge 会把卡片上的每个数字翻倍。加 `restoredLedgerToday` 标记，
+让收益只 merge 一次；run 记录本身幂等，不需要该标记。
+
+**验证（四项实测，均跑真实导出模块，非替身）**：
+
+| 用例 | 结果 |
+|---|---|
+| `node tools/run-suite.mjs`（17 套） | **332 passed, 0 failed** |
+| 含 `runs` 的 ledger → 重启后读 status | `servedSlots=["2026-10-11T09"]`、`lastRunDate` 正确恢复，`dueSlot("checkin")` 返回 `undefined`，**锁恢复生效**；10 passed, 0 failed |
+| `date` 为昨天的 ledger | 全部忽略，当日 09:00 仍 due（不跨天误恢复）；7 passed, 0 failed |
+| 不含新字段的老格式 | 不报错、旧 accounts 仍在、重复应用不清空，且下次保存自动补上 `runs`；9 passed, 0 failed |
+
+`node tools/check-publish.mjs` 同时 6 passed, 0 failed。
+
+**对照实验**：用修复前的 `HEAD:lib/index.js`（519,701 B）替换被导入模块，
+跑同一套断言必须失败 —— 否则测试本身没在测这个 bug：
+
+| 套件 | 修复前基线 | 修复后 |
+|---|---|---|
+| 单元断言 | **24 passed, 14 failed** | 39 passed, 0 failed |
+| 重启断言 | **4 passed, 6 failed** | 10 passed, 0 failed |
+
+基线失败项恰好复现原症状：`lastRunDate=undefined` 与
+`checkinCredit=100` **同时出现**（同一个文档，自相矛盾），
+且 09:00 slot 再次 due（锁丢了）。
+
+**未做物理进程重启的原因**：提供 `/plugins/dsh-rotakit/status` 的进程就是
+运行验证的宿主进程，杀掉它等于杀掉观察者本身。改为在同一边界复现
+（丢弃 scheduler 实例 → 从设置文档重建 → `applyEarningsLedger`），
+与被测路径完全一致，并由上述对照实验背书。
+
+**改动范围**：仅 `lib/index.js`（+ `package.json` 版本号）。
 ## 2.3.6 (2026-10-10)
 
 ### 请求记录在流结束前就被写盘，取消结果被静默丢弃
