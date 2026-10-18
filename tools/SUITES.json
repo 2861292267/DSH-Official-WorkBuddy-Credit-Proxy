@@ -109,6 +109,10 @@
     {
       "file": "_verify_stream_outcome.mjs",
       "covers": "four terminal outcomes stay distinct; a stream-cut after content is never retried; 429 rotates in-pool"
+    },
+    {
+      "file": "_verify_rtk.mjs",
+      "covers": "RTK tool-output compaction: shrink big diffs, keep truncation counts, never touch errors or hand-written turns"
     }
   ]
 }
