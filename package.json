@@ -61,6 +61,8 @@
   "scripts": {
     "test": "node tools/run-suite.mjs",
     "check": "node tools/check-package-files.mjs",
+    "check:deployed": "node tools/check-deployed.mjs",
+    "deploy": "node tools/deploy.mjs",
     "prepublishOnly": "node tools/check-package-files.mjs"
   },
   "dsh": {

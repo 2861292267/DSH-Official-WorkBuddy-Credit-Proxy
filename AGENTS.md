@@ -316,7 +316,8 @@ node _ui/verify-locales.mjs --added N   # N = 本次每包新增的键数，从 
 
 ```
 □ package.json 版本号 +0.0.1（仓库与安装两侧）
-□ lib/ 已同步到安装目录
+□ lib/ 已同步到安装目录（用 `node tools/deploy.mjs`，不要手工 copy）
+□ node tools/check-deployed.mjs      绿
 □ node tools/check-publish.mjs      绿
 □ node tools/run-suite.mjs          绿
 □ 新文案已加进中英两份语言包
@@ -326,3 +327,61 @@ node _ui/verify-locales.mjs --added N   # N = 本次每包新增的键数，从 
 □ 已 commit 并 push
 □ 已重启验证
 ```
+
+---
+
+## 八、2026-10-18：一天之内崩了三次，全是同一个形状
+
+当天 `lib/index.js` 被手改三次，三次都加载失败。三次都不是逻辑错，是**改完没让解析器看过**。
+
+| 时间 | 改法 | 崩在哪 |
+|---|---|---|
+| 17:01 | 插入 `setAlternates` / `alternateFor` | 方法后多一个 `}`，class 提前闭合 → 顶层出现 `reset() {` |
+| 17:11 | 插入 `fetchAlternates` | 同样多一个 `}` → 顶层出现 `async fetchCredits()` |
+| 17:31 | 接线「免费行→付费行」提示 | 整段代码重复插入，`for` 被提前闭合 → `continue` 落到循环外 |
+
+三个报错行号（4863 / 1380 / 8804）都离真正的改动点几百行，光看报错根本猜不到是括号问题。
+所以有了下面两个脚本。
+
+### `tools/check-deployed.mjs` —— 体检
+
+```
+node tools/check-deployed.mjs          # 体检部署副本（含与仓库的漂移比对）
+node tools/check-deployed.mjs --repo   # 只体检仓库副本
+```
+
+查五件事：每个 `lib/*.js` 能否解析、**有没有方法掉到模块顶层**（就是上面三次的形状）、
+关键方法是否还在类里、命名导入是否真的被导出、部署副本与仓库是否分叉。
+
+第 2 项是 `node --check` 查不出来的：它只告诉你"第 N 行 unexpected token"，
+而这里直接告诉你"`fetchCredits()` 掉到顶层了，通常是上方 class 被多余的 `}` 提前闭合"。
+
+第 4 项也是 `node --check` 的盲区——命名导入缺失要到**加载期**才炸。
+
+### `tools/deploy.mjs` —— 部署
+
+```
+node tools/deploy.mjs --dry-run   # 看会覆盖哪些文件
+node tools/deploy.mjs             # 预检 → 备份 → 复制 → 复检，失败自动回滚
+```
+
+部署目录是 `~/.dsh/profiles/desktop/node_modules/dsh-rotakit`，可用环境变量
+`DSH_ROTAKIT_HOME` 覆盖。备份落在 `~/.dsh/profiles/desktop/.dsh-rotakit-backups/deploy-<时间戳>/`。
+
+### 两条新增硬规矩
+
+1. **不许手改部署目录。** 那是产物，改了不回仓库、没有版本记录、坏了没得对比。
+2. **部署完必须重启 DSH。** 热重载不可靠：插件一旦加载失败，watcher 会卡死，
+   之后改文件、甚至 touch 时间戳都不会重新加载（当天实测）。判断插件是否真的活着，
+   看 `~/.dsh/.workbuddy-xdpool/boot-scan.json` 的 `at` 是不是刚刚——它只在 `apply()` 时写一次。
+
+### 已知的坑
+
+- `cordis.patch.yml` 里 `llm-rotakit` 有**两条** entry，patch 按 id 匹配、**最后一条生效**。
+  历史上有过一条没有 `name`、只有 `disabled: true` 的残留条目，把整个插件关掉，
+  导致 `/plugins/dsh-rotakit/*` 全部 404。要删就删，别留着。
+- `lib/protocol-compat.js` 仓库版与部署版可能只差行尾符（CRLF vs LF），
+  999 行就是 999 字节的差，看着像真有改动。`check-deployed.mjs` 已按归一化内容比较。
+- `reasoningEffort` 是自由字符串，写错不会报错；`thinkingLevelMap` 只映射上游
+  `supportedEfforts` 里声明过的档位，没声明就是 `null`（等于 off）。所以调档位
+  最坏情况是无效，不是崩溃。
