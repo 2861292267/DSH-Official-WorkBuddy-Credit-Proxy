@@ -4,6 +4,90 @@
 
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 2.3.36 (2026-10-18)
+
+本版集中修复四类历史问题，并补上补偿活动与到期优先选号。
+
+### 一、`this.seedExpiries is not a function` —— 每个请求都 500
+
+**症状**：重启后所有请求返回 500，宿主把同一条错误重试 5 次，前端显示「已重试模型请求 (1/5)」。
+
+**根因**：我在 `acquire()` 里加了 `await this.seedExpiries(pool)`，却没有定义这个方法。
+`node --check` 通过（语法合法），当时 25 套回归也全绿——没有任何一套会实例化这个类、更不会走到这条路径。
+
+**修复**：补上 `seedExpiries(pool)`，四条设计约束写在方法注释里：只查没有记录的账号、失败退避 60 秒、并发上限 4、错误全部吞掉。
+
+**验证**：新增 `_verify_method_refs.mjs`，对每个 `var X = class {` 做成员对账，任何 `this.foo()` 找不到定义就报错。
+反向验证：把 `seedExpiries` 改名，该套件立刻点名报出。
+
+### 二、到期优先从未生效 —— 排序代码正确，但数据是空的
+
+**症状**：13 天到期的账号先被消耗，4.8 天到期的排在后面。
+
+**根因**：`pickByWeight` 的排序逻辑没问题，但 `creditExpiries` 是内存 Map，只在查 `/status` 和「流式成功后」才会填。而请求走的是 shim 的 `/v1/chat/completions`，两条路径都不经过。于是选号时这张表是空的，直接落到闲置加权兜底。
+
+**修复**：`acquire()` 在选号前调用 `seedExpiries()` 预取到期数据；种子填充后重新过滤一遍，余额低于门槛的账号当场剔除。
+
+**验证**：新增 `_verify_expiry_priority.mjs`。用真实的四档到期分布跑 40 次：
+- 改动前（软加成）：最早到期账号命中 **7/40 = 17.5%**
+- 改动后（严格排序）：**40/40 = 100%**
+
+### 三、国际版 `no configured model` —— 兜底模型表落后于真实目录
+
+**症状**：`pi-ai provider "workbuddy-xdpool" has no configured model "deepseek-v4.1-flash"`。
+
+**根因**：`FALLBACK_WORKBUDDY_MODELS` 是首次拉目录前唯一的模型清单，里面写的还是旧 id `deepseek-v4-flash`。实测国际版目录只有 `deepseek-v4.1-flash` 与 `-sg`，根本没有 `deepseek-v4-flash`。
+
+**修复**：兜底表从 11 个补到 18 个，覆盖配置里全部 17 个启用模型，参数取自 `/status?region=cn` 实测值。
+
+**验证**：新增 `_verify_fallback_models.mjs`，要求「配置启用的每个模型都必须在兜底表里」。
+
+同时给 `regionOf()` 补了 **JWT iss 判区**：`auth.domain` 为空时，从 token 的 `iss` 声明判断国内/国际，避免把国际版账号送进国内网关。
+
+### 四、`/version` 与 `/rollback` 在 `import.meta.url` 缺失时 500
+
+**根因**：热重载后模块在一个没有 `import.meta.url` 的上下文里求值，`fileURLToPath(undefined)` 抛错。`/version` 是卡片打开时必拉的接口，坏了就看不到设置面板。
+
+**修复**：三处 `fileURLToPath` 全部加 try/catch；`checkVersion` 在 `pluginDir` 为 undefined 时诚实降级（`compared: 0`，不伪造结论）；`/rollback` 明确返回 503。
+
+**验证**：新增 `_verify_version_route.mjs`，静态检查 try 保护 + 行为层真实调用三种输入。
+
+### 五、新增：补偿活动领取
+
+从网页前端 bundle 里挖出真实接口（注意**没有 `/v2` 前缀**）：
+
+- `POST /billing/meter/compensation-status`
+- `POST /billing/meter/claim-compensation`
+- `POST /billing/meter/check-gift-claimed`
+- `POST /billing/meter/claim-gift`
+
+新增 4 条路由与卡片按钮。读写分离：轮询状态永远走只读路由，只有点击才走 claim。
+
+**验证**：`_verify_campaign_locale.mjs`（语言包 1:1）、`_verify_campaign_render.mjs`（变量作用域）、`_verify_campaign_claim.mjs`（领取后必须回写状态）。
+
+### 六、重试策略：5 次 / 15.7 秒 → 2 次 / 0.8 秒
+
+这个 provider 的后端是 `127.0.0.1` 上的本地 shim。切国内/国际时宿主重新解析 provider，切换瞬间的请求会以 `TRANSPORT`/`TIMEOUT` 立刻失败（会话日志实测 `usage: 0`、耗时 0 ms）。
+
+宿主默认策略把这种毫秒级抖动放大成十几秒等待。改为：
+
+```js
+retryPolicy: resolveRetryPolicy({
+  mode: "normal",
+  maxRetries: 2,
+  backoff: { initialDelayMs: 400, maxDelayMs: 2e3, jitterRatio: 0.1 }
+}, "dsh-rotakit retryPolicy")
+```
+
+可重试码集**未改动**（仍含 TIMEOUT/TRANSPORT），砍掉的只是次数。
+
+**验证**：`_verify_retry_policy.mjs`。
+
+### 回归
+
+25 套 · 408 条断言 · 0 失败。
+
+---
 ## 2.3.25 (2026-10-12)
 
 ### 账号表的「积分」与「最近使用」两列从来是空的

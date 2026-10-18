@@ -69,6 +69,38 @@
     {
       "file": "_xcheck2.mjs",
       "covers": "second cross-check pass"
+    },
+    {
+      "file": "_verify_campaign_locale.mjs",
+      "covers": "compensation/gift campaign UI: route parity host<->card, live calls, locale keys in both tables"
+    },
+    {
+      "file": "_verify_campaign_render.mjs",
+      "covers": "campaign markup sits in the function that declares its props (the campaign-is-not-defined regression)"
+    },
+    {
+      "file": "_verify_campaign_claim.mjs",
+      "covers": "a campaign claim writes its result back into card state (the claim-looks-dead regression)"
+    },
+    {
+      "file": "_verify_expiry_priority.mjs",
+      "covers": "expiry-first selection: soonest lapsing credits used first, equal deadlines rotate, unusable accounts skipped"
+    },
+    {
+      "file": "_verify_fallback_models.mjs",
+      "covers": "static fallback model list covers every configured model (the has-no-configured-model regression)"
+    },
+    {
+      "file": "_verify_method_refs.mjs",
+      "covers": "every this.method() call in a class resolves to a member (the this.seedExpiries is not a function regression)"
+    },
+    {
+      "file": "_verify_version_route.mjs",
+      "covers": "version/rollback routes survive a missing import.meta.url instead of 500ing"
+    },
+    {
+      "file": "_verify_retry_policy.mjs",
+      "covers": "the provider declares a short retry tail (2 tries / 2s) instead of the host default 5 / 10s"
     }
   ]
 }
