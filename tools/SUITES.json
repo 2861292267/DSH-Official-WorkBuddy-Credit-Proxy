@@ -105,6 +105,10 @@
     {
       "file": "_verify_model_block.mjs",
       "covers": "the account-cannot-serve-model block stays <= 60 min (was 6h, idled funded accounts)"
+    },
+    {
+      "file": "_verify_stream_outcome.mjs",
+      "covers": "four terminal outcomes stay distinct; a stream-cut after content is never retried; 429 rotates in-pool"
     }
   ]
 }
