@@ -113,6 +113,14 @@
     {
       "file": "_verify_rtk.mjs",
       "covers": "RTK tool-output compaction: shrink big diffs, keep truncation counts, never touch errors or hand-written turns"
+    },
+    {
+      "file": "_verify_cache_hit.mjs",
+      "covers": "cache-hit accounting: hit/(hit+miss), never count un-reported rows as misses, null when no samples"
+    },
+    {
+      "file": "_verify_alternate_line.mjs",
+      "covers": "free-to-paid alternate line hint from ModelRateLimitCap; never fabricate a -sg id; never call an undefined method"
     }
   ]
 }
