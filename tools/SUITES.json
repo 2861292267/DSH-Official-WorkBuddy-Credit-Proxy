@@ -121,6 +121,10 @@
     {
       "file": "_verify_alternate_line.mjs",
       "covers": "free-to-paid alternate line hint from ModelRateLimitCap; never fabricate a -sg id; never call an undefined method"
+    },
+    {
+      "file": "verify-client-loads.mjs",
+      "covers": "the card really loads: factory is executed with a host-like stub (the 2.4.0 TDZ regression), and route constants precede ROUTES"
     }
   ]
 }

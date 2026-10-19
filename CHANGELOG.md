@@ -4,6 +4,138 @@
 
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 2.4.0 (2026-10-18)
+
+一次性大版本：**多 Key 治理**、**访问审计**、**配置热更新**、**状态 SSE**，
+外加把「已完成 70% 但从未上线」的新 UI 真正构建出来。
+
+前三项是新增能力，第四项是把既有代码从「能跑但没部署」变成「部署且验证过」。
+
+### 一、UI：从折叠卡片换成全屏控制台
+
+运行中的卡片从 2.3.26 起就没换过骨架（`dsm-workbuddy-xdpool-*` 类名）。
+`重构-rotakit/src/` 下那套 `rk-*` 新 UI 写完了约七成，但**从未构建进
+`lib/client.js`**，而且它本身是坏的：
+
+| 缺陷 | 后果 |
+|---|---|
+| `ui-tokens.js` 少一个 `}`，`.rk-search input` 之后全部样式被嵌套吞掉 | 开关、弹层、响应式断点全部失效（ `.rk-search:focus-within` 也在内） |
+| `ui-components.js` 里 `requestOutcome` 函数体内重复定义自身，返回对象键写两遍 | 死代码，且掩盖了真实的结局分支 |
+| 前端 `ROUTES` 引用 9 个后端不存在的路由 | 上线即 404 |
+| 语言包注册成 `{ zh: {}, en: {} }` | 所有文案只能靠硬编码兜底 |
+
+本次全部修掉并实际构建：`src/ui-{tokens,components,panel}.js` 重写，
+产物 120 KB（旧 UI 409 KB），`node --check` 真校验通过。
+
+**五页信息架构**：概览 / 账号 / 任务 / 流水 / 设置。
+「设置」独立成页而不是塞顶栏，因为它要承载密钥 CRUD、审计查询、
+行为参数、主题切换四类内容。
+
+**自适应密度**：宽屏行高 30px 紧凑排，≤900px 自动切 38px 舒适排，
+≤620px 再放宽到 44px。用容器查询而非媒体查询 —— 宿主中央列会被右侧
+面板挤压，视口 1376 时它可能只有 796px，媒体查询会在那种情况下按宽屏渲染。
+
+**独立双主题**：深浅两套独立取色（不是把暗色取反），默认跟随系统，
+可在设置页手动锁定。
+
+### 二、多 Key 分发与配额治理
+
+新增 `lib/rotakit-pro.js`（独立模块，index.js 对它的引用全部带保护）。
+
+- 每把 key：名称、每日请求上限、模型白名单、来源 IP 白名单、启停
+- 密钥只存 sha256，**明文仅在创建/轮转那一刻返回一次**
+- 鉴权顺序刻意为之：宿主密钥永远放行 → 比对 hash → 启用状态 → IP → 配额。
+  「key 不存在」不该告诉对方「你的 IP 不在白名单」
+- 模型白名单在**别名解析之后**校验：放在前面的话客户端发一个别名就能绕过，
+  而实际落到的是另一个模型
+- 配额按本地自然日滚动，每 10 秒节流落盘
+
+**局域网访问**（`allowLan`）三重条件缺一不可：显式开启、存在启用中的托管
+密钥、Pro 运行时可用。少了任何一条都退回只绑回环 —— 一个「开了开关但没建
+key」的网关等于把账号池公开在局域网上。开启后**只有托管密钥**可以来自非
+回环地址，宿主密钥仍限本机（它没有配额与白名单）。
+
+### 三、访问审计
+
+`.workbuddy-xdpool/audit-YYYY-MM-DD.jsonl`，每请求一行：时间、密钥、来源
+IP、方法、路径、状态码、耗时。**被拒的请求也记录** —— 「谁在什么时候用哪把
+key 被拒了、为什么」是审计最有价值的一半，只记成功请求的日志回答不了
+「我的 key 是不是被人试过」。
+
+面板可按时间范围与状态筛选，可导出 CSV。默认保留 14 天。
+
+### 四、配置热更新
+
+`saveSelection` 写入后立刻 `applySelection` + `invalidateCatalog`，
+不再只依赖异步的 `settings/document-updated` —— 那条事件重读时可能还拿到
+旧值，把刚写进去的 catalog 覆盖回去，表现为「保存成功但界面跳回原状」。
+
+新增 `POST /plugins/dsh-rotakit/settings`，**白名单制**：只接受
+`distribution` / `cooldownMs` / `minUsableCredits` / `automation` 四个字段。
+这个接口的入参来自浏览器，把整个 config 交出去意味着页面可以改 `authFile`
+（指向任意目录）或 `automationEarnings`（伪造收益账本）。
+
+### 五、状态 SSE
+
+新增 `GET /plugins/dsh-rotakit/status-stream`，服务端每 5 秒比较一次，
+只在内容变化时推送；最多 8 个并发连接。SSE 不可用时回落到轮询
+（带指数退避），两条路都保留。
+
+### 六、一键领取
+
+新增 `POST /plugins/dsh-rotakit/rewards/claim-all`，服务端遍历全池把
+可领的补偿与新手礼包都领掉，返回 authoritative 摘要。旧 UI 是逐账号点。
+
+### 七、顺手修掉的
+
+- `disposeCompensation` / `disposeGift` 等四条路由此前漏了注销，插件重载会留下四组悬挂 handler
+- 补上 `poolWebStatus` 的账号显示名覆盖（`account-labels.json`，不改任何 `.info` 文件）
+- `status.trend` 从此被真正读出来：它是 `{ days, points: [...], max }` 而不是数组，
+  旧前端当数组读，趋势条永远是空的
+
+### 八、回归与验证
+
+| 套件 | 结果 |
+|---|---|
+| `tools/verify-pro-2.4.mjs`（新增，19 条） | 全通过，覆盖鉴权/停用/白名单/配额/审计/CSV/路由注册/SSE 首帧 |
+| `_verify_campaign_locale.mjs` | 重写为 8 条，含反向验证 |
+| `_verify_campaign_claim.mjs` | 重写为 8 条，含反向验证 |
+| `_verify_minor.mjs` | 重写为 28 条，含反向验证 |
+| 全量 `run-suite` | 329 assertions，12 个失败套件与 2.3.x 基线一致 |
+
+**12 个失败套件与升级前完全相同**（用备份的旧 lib 跑同一套件作基线比对），
+全部是需要活进程的 `no verdict` 或本来就断言旧 UI 内部符号的三套。
+账号 26 个快照 md5 逐个比对**零变更**，`cordis.patch.yml` md5 未变。
+
+### 九、2.4.0 首发的启动崩溃（已修）
+
+第一次部署后 DeepSeek Harness 起不来，报：
+
+```
+dsh-rotakit: import failed: Cannot access 'POOL_COMPENSATION_PATH' before initialization
+```
+
+根因：为满足 `_verify_campaign_locale.mjs` 的「两侧各有一行 `const NAME = "..."`」，
+在 `ui-panel.js` 里补了五个路径字面量，但放在了 `ROUTES` 对象**之后** ——
+而 `ROUTES` 的初始化器要引用它们。`const` 会提升但处于暂时死区，
+引用即抛 `ReferenceError`。
+
+**三道防线全部漏掉**：`node --check` 只查文法不求值；所有字符串断言都能匹配到
+那几行文本；三个 UI 套件也只在做 `includes()` 比对。没有一条真的执行过 factory。
+
+修复：把常量块移到 `export const ROUTES` 之前。
+
+固化：新增 `tools/verify-client-loads.mjs`（9 条），
+**真的执行一次** `window.__ModuleLoader__.load({ factory })`，
+模拟宿主加载路径；并对「常量必须声明在 ROUTES 之前」做顺序断言 + 反向验证。
+凡是改动 `client.js` 顶部声明顺序的提交，都会被它拦住。
+
+### 九、已知限制
+
+- `lib/rotakit-pro.js` 未加入 `TRACKED_FILES`：加了会让自更新因远端 tarball 缺该文件而失败。代价是走面板「更新」会把多 Key/审计/SSE 回退到 2.3.x 行为
+- 新 UI 的中文兜底文案完整，但尚无 `zh`/`en` 语言包 —— 宿主语言为英文时显示中文
+- 礼包/到期列表在本次重构中未重新实现（旧卡片有，新概览页暂时没有）
+
 ## 2.3.36 (2026-10-18)
 
 本版集中修复四类历史问题，并补上补偿活动与到期优先选号。
